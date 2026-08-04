@@ -2,12 +2,14 @@ const YouTube = {
   isRedirecting: false,
   initialized: false,
   observer: null,
+  inlineHidingFrame: null,
   lastUrl: "",
   lastBlockState: null,
   currentMode: "strict",
   isActive: false,
   hiddenNavElements: new Set(),
   hiddenFocusElements: new Set(),
+  hiddenMostRelevantElements: new Set(),
   init: function () {
     if (this.initialized) return;
     Utils.ensureBody(() => this._start());
@@ -40,7 +42,11 @@ const YouTube = {
       ) {
         this.runChecks();
       }
-      if (changes.hide_yt_shorts_nav || changes.hide_yt_shorts_shelves) {
+      if (
+        changes.hide_yt_shorts_nav ||
+        changes.hide_yt_shorts_shelves ||
+        changes.hide_yt_most_relevant_shelf
+      ) {
         if (changes.hide_yt_shorts_nav) {
           CONFIG.visualHiding.ytShortsNav =
             changes.hide_yt_shorts_nav.newValue !== false;
@@ -48,6 +54,10 @@ const YouTube = {
         if (changes.hide_yt_shorts_shelves) {
           CONFIG.visualHiding.ytShortsShelves =
             changes.hide_yt_shorts_shelves.newValue !== false;
+        }
+        if (changes.hide_yt_most_relevant_shelf) {
+          CONFIG.visualHiding.ytMostRelevantShelf =
+            changes.hide_yt_most_relevant_shelf.newValue !== false;
         }
         this.applyInlineHiding();
       }
@@ -64,7 +74,10 @@ const YouTube = {
     if (!document.body) return;
     if (!this.observer) {
       this.observer = Utils.trackObserver(
-        new MutationObserver(() => this.runChecks()),
+        new MutationObserver(() => {
+          this.scheduleInlineHiding();
+          this.runChecks();
+        }),
       );
       this.observer.observe(document.body, {
         childList: true,
@@ -171,6 +184,7 @@ const YouTube = {
       reason = "safe page";
       this.clearSession();
       UI.remove();
+      this.checkKick();
     }
     Utils.debugLog("yt", {
       url,
@@ -188,23 +202,36 @@ const YouTube = {
     const mode = isForced ? "strict" : CONFIG.platformSettings.yt;
     if (mode === "strict") {
       this.isRedirecting = true;
-      sessionStorage.setItem("ft_kicked", "true");
       Utils.logStat();
-      window.location.replace("https://www.youtube.com");
+      Utils.markKick("yt", () => {
+        this.navigateHome();
+        setTimeout(() => {
+          this.isRedirecting = false;
+          this.checkKick();
+          this.runChecks();
+        }, 1000);
+      });
     } else if (mode === "warn") {
       UI.create(
         "warn",
         "yt",
         () => {
-          Utils.unlockVideo();
-          setTimeout(() => {
-            document.querySelectorAll("video").forEach((v) => v.play());
-          }, 50);
+          this.runChecks();
         },
-        () => (window.location.href = "https://www.youtube.com"),
+        () => this.navigateHome(),
       );
       Utils.lockVideo();
     }
+  },
+  navigateHome: function () {
+    const homeLink = document.querySelector(
+      'a[href="/"], a[title="Home"], ytd-guide-entry-renderer a[href="/"]',
+    );
+    if (homeLink && typeof homeLink.click === "function") {
+      homeLink.click();
+      return;
+    }
+    window.location.replace(new URL("/", window.location.origin).href);
   },
   isSessionAllowed: function () {
     return (
@@ -242,8 +269,24 @@ const YouTube = {
   clearInlineHiding: function () {
     this.restoreHidden(this.hiddenNavElements);
     this.restoreHidden(this.hiddenFocusElements);
+    this.restoreHidden(this.hiddenMostRelevantElements);
+  },
+  scheduleInlineHiding: function () {
+    if (this.inlineHidingFrame || !this.isActive) return;
+    const run = () => {
+      this.inlineHidingFrame = null;
+      if (this.isActive) this.applyInlineHiding();
+    };
+    if (typeof requestAnimationFrame === "function") {
+      this.inlineHidingFrame = requestAnimationFrame(run);
+    } else {
+      this.inlineHidingFrame = setTimeout(run, 50);
+    }
   },
   applyInlineHiding: function () {
+    Utils.pruneDetachedElements(this.hiddenNavElements);
+    Utils.pruneDetachedElements(this.hiddenFocusElements);
+    Utils.pruneDetachedElements(this.hiddenMostRelevantElements);
     const shouldHide =
       FocusState.shouldBlock && Utils.shouldApplyVisualHiding("yt");
     if (!shouldHide) {
@@ -301,6 +344,45 @@ const YouTube = {
           if (tab) this.hideElement(tab, this.hiddenFocusElements);
         });
     }
+    this.applyMostRelevantShelfHiding();
+  },
+  isSubscriptionsFeed: function () {
+    const path = window.location.pathname.replace(/\/+$/, "");
+    return path === "/feed/subscriptions";
+  },
+  getShelfHeadingText: function (shelf) {
+    const headingSelectors = [
+      "#title",
+      "h2",
+      "h3",
+      "yt-formatted-string#title",
+      '[role="heading"]',
+    ];
+    for (const selector of headingSelectors) {
+      const heading = shelf.querySelector(selector);
+      const text = heading?.textContent?.trim();
+      if (text) return text;
+    }
+    return "";
+  },
+  isEnglishMostRelevantShelf: function (shelf) {
+    return this.getShelfHeadingText(shelf).toLowerCase() === "most relevant";
+  },
+  applyMostRelevantShelfHiding: function () {
+    if (
+      !CONFIG.visualHiding.ytMostRelevantShelf ||
+      !this.isSubscriptionsFeed()
+    ) {
+      this.restoreHidden(this.hiddenMostRelevantElements);
+      return;
+    }
+    document
+      .querySelectorAll("ytd-rich-section-renderer, ytd-reel-shelf-renderer")
+      .forEach((shelf) => {
+        if (this.isEnglishMostRelevantShelf(shelf)) {
+          this.hideElement(shelf, this.hiddenMostRelevantElements);
+        }
+      });
   },
   setLogoFix: function (isEnabled) {
     if (!document.body) return;
@@ -331,10 +413,8 @@ const YouTube = {
     this.setLogoFix(isHidden);
   },
   checkKick: function () {
-    if (sessionStorage.getItem("ft_kicked")) {
-      sessionStorage.removeItem("ft_kicked");
-      UI.showKickNotification();
-    }
+    if (window.location.href.includes("/shorts/")) return;
+    Utils.consumeKick("yt", () => UI.showKickNotification());
   },
 };
 if (Site.isYT()) {

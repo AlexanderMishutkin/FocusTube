@@ -8,7 +8,6 @@ const Instagram = {
   hiddenNavContainers: new Set(),
   igSelectors: {
     nav: {
-      explore: 'a[href="/explore/"]',
       reels: 'a[href="/reels/"], a[href$="/reels/"]',
     },
   },
@@ -59,9 +58,6 @@ const Instagram = {
     this.applyVisible(
       document.body.querySelectorAll(this.igSelectors.nav.reels),
     );
-    this.applyVisible(
-      document.body.querySelectorAll(this.igSelectors.nav.explore),
-    );
     this.restoreHidden(this.hiddenNavContainers);
     if (this.observer) this.observer.disconnect();
     this.observer = null;
@@ -78,9 +74,6 @@ const Instagram = {
       this.removeStoriesOverlay();
       this.applyVisible(
         document.body.querySelectorAll(this.igSelectors.nav.reels),
-      );
-      this.applyVisible(
-        document.body.querySelectorAll(this.igSelectors.nav.explore),
       );
       this.restoreHidden(this.hiddenNavContainers);
       UI.remove();
@@ -139,7 +132,6 @@ const Instagram = {
           "warn",
           "ig",
           () => {
-            Utils.unlockVideo({ forcePlay: true });
             this.runChecks();
           },
           () => {
@@ -156,10 +148,7 @@ const Instagram = {
       action = "safe";
       reason = "non-blockable path";
       if (CONFIG.session.platform === "ig") Utils.clearSession();
-      if (sessionStorage.getItem("ft_kicked")) {
-        sessionStorage.removeItem("ft_kicked");
-        UI.showKickNotification();
-      }
+      this.showKickNotice();
     }
     const isHomepage = path === "/" || path === "";
     const shouldHideStories =
@@ -203,22 +192,25 @@ const Instagram = {
       return;
     if (path === "/") return;
     this.isRedirecting = true;
-    sessionStorage.setItem("ft_kicked", "true");
-    sessionStorage.setItem("ft_kicked_time", Date.now().toString());
     Utils.logStat();
-    window.location.replace("/");
+    Utils.markKick("ig", () => {
+      window.location.replace("/");
+    });
     setTimeout(() => {
       this.isRedirecting = false;
+      if (!this.isBlockablePath(window.location.pathname)) {
+        this.showKickNotice();
+      }
+      this.runChecks();
     }, 2000);
   },
   checkKick: function () {
-    if (
-      sessionStorage.getItem("ft_kicked") &&
-      !this.isBlockablePath(window.location.pathname)
-    ) {
-      sessionStorage.removeItem("ft_kicked");
-      UI.showKickNotification();
+    if (!this.isBlockablePath(window.location.pathname)) {
+      this.showKickNotice();
     }
+  },
+  showKickNotice: function () {
+    Utils.consumeKick("ig", () => UI.showKickNotification());
   },
   applyHidden: function (elements) {
     if (!elements) return;
@@ -239,15 +231,12 @@ const Instagram = {
     }
   },
   hideNavLinks: function () {
+    Utils.pruneDetachedElements(this.hiddenNavContainers);
     const reelsLinks = document.body.querySelectorAll(
       this.igSelectors.nav.reels,
     );
-    const exploreLinks = document.body.querySelectorAll(
-      this.igSelectors.nav.explore,
-    );
     this.applyHidden(reelsLinks);
-    this.applyHidden(exploreLinks);
-    [...reelsLinks, ...exploreLinks].forEach((link) => {
+    [...reelsLinks].forEach((link) => {
       if (!link) return;
       const navRoot = link.closest("nav");
       if (!navRoot) return;
@@ -265,9 +254,6 @@ const Instagram = {
   showNavLinks: function () {
     this.applyVisible(
       document.body.querySelectorAll(this.igSelectors.nav.reels),
-    );
-    this.applyVisible(
-      document.body.querySelectorAll(this.igSelectors.nav.explore),
     );
     this.restoreHidden(this.hiddenNavContainers);
   },

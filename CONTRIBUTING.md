@@ -36,10 +36,10 @@ Firefox uses `firefox-manifest.json`.
 
 Before submitting changes, manually test the affected browser and platform behavior:
 
-- YouTube Shorts blocking and Shorts navigation/shelf hiding.
+- YouTube Shorts blocking, Shorts navigation/shelf hiding, and Subscriptions "Most relevant" shelf hiding in English YouTube UI.
 - Instagram Reels/Explore path blocking, Stories, and Reels navigation behavior.
 - TikTok feed/video blocking and safe pages such as messages/settings.
-- Facebook Reels and Stories behavior.
+- Facebook Reels route blocking, Reels navigation, Stories, and People You Might Know hiding behavior.
 - LinkedIn feed and sidebar hiding behavior.
 - Popup controls, per-platform modes, and timer controls.
 - Options page settings, import/export, reset, and clear-data flows.

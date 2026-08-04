@@ -7,10 +7,10 @@
 
   **Supports YouTube Shorts, Instagram Reels, TikTok, Facebook Reels, and LinkedIn feed controls.**
 
-  [Installation](#installation) • [Features](#features) • [Configuration](#configuration) • [Project Impact](#project-impact) • [Technical Highlights](#technical-highlights) • [Privacy](#privacy)
+  [Installation](#installation) | [Features](#features) | [Configuration](#configuration) | [Project Impact](#project-impact) | [Technical Highlights](#technical-highlights) | [Privacy](#privacy)
 
   ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-  ![Version](https://img.shields.io/badge/version-2.2.0-green.svg)
+  ![Version](https://img.shields.io/badge/version-2.3.0-green.svg)
   ![Firefox](https://img.shields.io/badge/firefox-compatible-orange.svg)
 </div>
 
@@ -30,10 +30,10 @@ The project supports Chromium browsers with a Manifest V3 build and Firefox with
 
 ### Supported Surfaces
 
-- **YouTube:** Blocks Shorts URLs and can hide Shorts navigation/shelves.
+- **YouTube:** Blocks Shorts URLs and can hide Shorts navigation/shelves plus the English "Most relevant" shelf on the Subscriptions page.
 - **Instagram:** Blocks Reels/Explore paths and can hide Reels navigation and Stories.
 - **TikTok:** Blocks common feed/video surfaces while allowing safer areas such as messages and settings.
-- **Facebook:** Blocks Reels paths and can hide Reels navigation and Stories.
+- **Facebook:** Blocks Reels paths and can hide Reels navigation, Stories, and People You Might Know suggestions.
 - **LinkedIn:** Can hide the main feed and "Add to your feed" sidebar card.
 
 ### Productivity Tools

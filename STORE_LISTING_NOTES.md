@@ -10,16 +10,16 @@ Reduce distracting Shorts, Reels, TikTok, Facebook, and LinkedIn feed surfaces w
 
 FocusTube is a privacy-first browser extension that helps reduce distracting social video and feed surfaces while keeping settings local to your browser.
 
-It can block or hide supported areas such as YouTube Shorts, Instagram Reels, TikTok feed/video pages, Facebook Reels, and the LinkedIn feed. Configure each platform from the popup, choose stricter or lighter blocking modes where supported, and use the focus/break timer when you want a temporary focused session.
+It can block or hide supported areas such as YouTube Shorts, the English "Most relevant" shelf on YouTube Subscriptions, Instagram Reels, TikTok feed/video pages, Facebook Reels, and the LinkedIn feed. Configure each platform from the popup, choose stricter or lighter blocking modes where supported, and use the focus/break timer when you want a temporary focused session.
 
 FocusTube is designed for simple, local productivity support. It does not use analytics, telemetry, account tracking, or a project-controlled remote backend.
 
 ## Feature Bullets
 
-- Block or reduce YouTube Shorts distractions.
+- Block or reduce YouTube Shorts distractions and hide the English "Most relevant" shelf on YouTube Subscriptions.
 - Block Instagram Reels/Explore paths and hide Reels navigation and Stories where supported.
 - Block common TikTok feed and video surfaces while allowing safer pages such as messages/settings.
-- Block Facebook Reels paths and hide Reels/Stories entry points.
+- Block Facebook Reels paths and hide targeted Reels, Stories, and People You Might Know entry points.
 - Hide the LinkedIn feed and "Add to your feed" sidebar card.
 - Configure per-platform modes from the popup.
 - Use a focus/break timer with optional browser notifications.

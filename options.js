@@ -20,9 +20,10 @@ document.addEventListener("DOMContentLoaded", function () {
     hide_fb_stories: true,
     hide_yt_shorts_nav: true,
     hide_yt_shorts_shelves: true,
+    hide_yt_most_relevant_shelf: true,
     hide_ig_reels_nav: true,
     hide_fb_reels_nav: true,
-    hide_fb_reels_shelves: true,
+    hide_fb_people_you_might_know: true,
     hide_li_feed: true,
     hide_li_addfeed: true,
     showBreakButton: true,
@@ -59,6 +60,8 @@ document.addEventListener("DOMContentLoaded", function () {
   ]);
   const importPlatformKeys = ["yt", "ig", "tt", "fb", "li"];
   const importPlatformModes = new Set(["strict", "warn", "allow"]);
+  const hasOwn = (object, key) =>
+    Object.prototype.hasOwnProperty.call(object, key);
   function sanitizeImportData(raw) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       return { error: "Import file must contain a JSON object." };
@@ -66,12 +69,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const sanitized = {};
     const invalidKeys = [];
     importBooleanKeys.forEach((key) => {
-      if (!(key in raw)) return;
+      if (!hasOwn(raw, key)) return;
       if (typeof raw[key] === "boolean") sanitized[key] = raw[key];
       else invalidKeys.push(key);
     });
     importNumberKeys.forEach((key) => {
-      if (!(key in raw)) return;
+      if (!hasOwn(raw, key)) return;
       if (raw[key] === null) {
         if (importNullableNumberKeys.has(key)) {
           sanitized[key] = null;
@@ -88,7 +91,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
     importStringKeys.forEach((key) => {
-      if (!(key in raw)) return;
+      if (!hasOwn(raw, key)) return;
       const value = raw[key];
       if (key === "accentColor") {
         if (typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value)) {
@@ -111,7 +114,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (typeof value === "string") sanitized[key] = value;
       else invalidKeys.push(key);
     });
-    if ("platformSettings" in raw) {
+    if (hasOwn(raw, "platformSettings")) {
       if (
         !raw.platformSettings ||
         typeof raw.platformSettings !== "object" ||
@@ -121,7 +124,7 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         const platformSettings = {};
         importPlatformKeys.forEach((platform) => {
-          if (!(platform in raw.platformSettings)) return;
+          if (!hasOwn(raw.platformSettings, platform)) return;
           const mode = raw.platformSettings[platform];
           if (importPlatformModes.has(mode)) {
             platformSettings[platform] = mode;
@@ -237,9 +240,24 @@ document.addEventListener("DOMContentLoaded", function () {
     wrapper.className = "custom-select-wrapper";
     const trigger = document.createElement("div");
     trigger.className = "custom-select-trigger";
-    const arrowSvg = `<svg class="custom-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
     const selectedOption = select.options[select.selectedIndex];
-    trigger.innerHTML = `<span>${selectedOption ? selectedOption.text : "Select"}</span>${arrowSvg}`;
+    const selectedText = document.createElement("span");
+    selectedText.textContent = selectedOption ? selectedOption.text : "Select";
+    const arrowSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    arrowSvg.setAttribute("class", "custom-arrow");
+    arrowSvg.setAttribute("viewBox", "0 0 24 24");
+    arrowSvg.setAttribute("fill", "none");
+    arrowSvg.setAttribute("stroke", "currentColor");
+    arrowSvg.setAttribute("stroke-width", "2");
+    arrowSvg.setAttribute("stroke-linecap", "round");
+    arrowSvg.setAttribute("stroke-linejoin", "round");
+    const arrowLine = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "polyline",
+    );
+    arrowLine.setAttribute("points", "6 9 12 15 18 9");
+    arrowSvg.appendChild(arrowLine);
+    trigger.append(selectedText, arrowSvg);
     const optionsList = document.createElement("div");
     optionsList.className = "custom-options";
     Array.from(select.options).forEach((option) => {
@@ -613,6 +631,11 @@ const platforms = {
         label: "Hide Shorts Shelves",
         desc: "Hide Shorts shelves in feed",
       },
+      {
+        id: "hide_yt_most_relevant_shelf",
+        label: 'Hide "Most Relevant" Shelf',
+        desc: 'Hide the "Most relevant" shelf on Subscriptions',
+      },
     ],
   },
   ig: {
@@ -645,9 +668,9 @@ const platforms = {
         desc: "Hide the Reels link in sidebar",
       },
       {
-        id: "hide_fb_reels_shelves",
-        label: "Hide Reels Shelves",
-        desc: "Hide Reels shelves in feed",
+        id: "hide_fb_people_you_might_know",
+        label: "Hide People You Might Know",
+        desc: "Hide people suggestions in the feed",
       },
     ],
   },
@@ -801,27 +824,46 @@ function showPlatformDetail(id) {
   const detailIcon = document.getElementById("detailIcon");
   const detailName = document.getElementById("detailName");
   const sourceSvg = document.querySelector(`[data-platform="${id}"] svg`);
-  if (detailIcon && sourceSvg) detailIcon.innerHTML = sourceSvg.outerHTML;
+  if (detailIcon && sourceSvg) detailIcon.replaceChildren(sourceSvg.cloneNode(true));
   if (detailName) detailName.textContent = platform.name;
   const modeContainer = document.getElementById("modeButtons");
   if (modeContainer) {
     const availableModes = getModesForPlatform(id);
-    modeContainer.innerHTML = availableModes
-      .map(
-        (mode) => `
-            <button class="mode-btn ${platformModes[id] === mode.id ? "selected" : ""} ${mode.disabled ? "disabled" : ""}"
-                    data-mode="${mode.id}" ${mode.disabled ? "disabled" : ""}>
-                <div class="mode-radio" style="border-color: ${platformModes[id] === mode.id ? mode.color : ""}">
-                    <div class="mode-dot" style="background: ${mode.color}"></div>
-                </div>
-                <div class="mode-info">
-                    <span class="label">${mode.label}</span>
-                    <span class="desc">${mode.desc}</span>
-                </div>
-            </button>
-        `,
-      )
-      .join("");
+    modeContainer.replaceChildren(
+      ...availableModes.map((mode) => {
+        const btn = document.createElement("button");
+        btn.className = "mode-btn";
+        if (platformModes[id] === mode.id) btn.classList.add("selected");
+        if (mode.disabled) {
+          btn.classList.add("disabled");
+          btn.disabled = true;
+        }
+        btn.dataset.mode = mode.id;
+
+        const radio = document.createElement("div");
+        radio.className = "mode-radio";
+        radio.style.borderColor =
+          platformModes[id] === mode.id ? mode.color : "";
+
+        const dot = document.createElement("div");
+        dot.className = "mode-dot";
+        dot.style.background = mode.color;
+        radio.appendChild(dot);
+
+        const info = document.createElement("div");
+        info.className = "mode-info";
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = mode.label;
+        const desc = document.createElement("span");
+        desc.className = "desc";
+        desc.textContent = mode.desc;
+        info.append(label, desc);
+
+        btn.append(radio, info);
+        return btn;
+      }),
+    );
     modeContainer.querySelectorAll(".mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (timerActive) return;
@@ -848,22 +890,34 @@ function showPlatformDetail(id) {
     settingsSection.style.display = "block";
     const settingKeys = platform.settings.map((setting) => setting.id);
     chrome.storage.local.get(settingKeys, (res) => {
-      settingsContainer.innerHTML = platform.settings
-        .map((setting) => {
+      settingsContainer.replaceChildren(
+        ...platform.settings.map((setting) => {
           const isOn = res[setting.id] !== false;
-          return `
-                    <div class="setting-row">
-                        <div class="setting-info">
-                            <div class="setting-label">${setting.label}</div>
-                            <div class="setting-desc">${setting.desc}</div>
-                        </div>
-                        <div class="toggle ${isOn ? "on" : ""}" data-setting-key="${setting.id}">
-                            <div class="toggle-thumb"></div>
-                        </div>
-                    </div>
-                `;
-        })
-        .join("");
+          const row = document.createElement("div");
+          row.className = "setting-row";
+
+          const info = document.createElement("div");
+          info.className = "setting-info";
+          const label = document.createElement("div");
+          label.className = "setting-label";
+          label.textContent = setting.label;
+          const desc = document.createElement("div");
+          desc.className = "setting-desc";
+          desc.textContent = setting.desc;
+          info.append(label, desc);
+
+          const toggle = document.createElement("div");
+          toggle.className = "toggle";
+          if (isOn) toggle.classList.add("on");
+          toggle.dataset.settingKey = setting.id;
+          const thumb = document.createElement("div");
+          thumb.className = "toggle-thumb";
+          toggle.appendChild(thumb);
+
+          row.append(info, toggle);
+          return row;
+        }),
+      );
       settingsContainer.querySelectorAll(".toggle").forEach((toggle) => {
         toggle.addEventListener("click", () => {
           const key = toggle.dataset.settingKey;

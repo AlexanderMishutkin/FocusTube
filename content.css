@@ -51,9 +51,7 @@ body.ft-platform-yt.ft-yt-logo-fix ytd-masthead #logo-icon svg {
   display: flex !important;
 }
 body.ft-hide-ig-reels-nav.ft-platform-ig nav a[href="/reels/"],
-body.ft-hide-ig-reels-nav.ft-platform-ig nav a[href="/explore/"],
 body.ft-hide-ig-reels-nav.ft-platform-ig nav a[href$="/reels/"],
-body.ft-hide-ig-reels-nav.ft-platform-ig nav a[href$="/explore/"],
 body.ft-hide-ig-reels-nav.ft-platform-ig nav svg[aria-label*="Reel"] {
   display: none !important;
 }

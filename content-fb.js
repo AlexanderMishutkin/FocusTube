@@ -4,7 +4,7 @@ const Facebook = {
   currentMode: "strict",
   storiesOverlayId: "ft-fb-stories-overlay",
   hiddenNavContainers: new Set(),
-  hiddenShelfContainers: new Set(),
+  hiddenPeopleContainers: new Set(),
   init: function () {
     if (this.initialized) return;
     Utils.ensureBody(() => this._start());
@@ -24,7 +24,7 @@ const Facebook = {
         changes.ft_timer_type ||
         changes.hide_fb_stories ||
         changes.hide_fb_reels_nav ||
-        changes.hide_fb_reels_shelves ||
+        changes.hide_fb_people_you_might_know ||
         changes.popup_visible_fb ||
         changes.restrictHiddenPlatforms ||
         changes.visualHideHiddenPlatforms
@@ -39,7 +39,9 @@ const Facebook = {
     if (!document.body) return;
     if (!this.observer) {
       this.observer = Utils.trackObserver(
-        new MutationObserver(() => this.runChecks()),
+        new MutationObserver(() => {
+          this.runChecks();
+        }),
       );
       this.observer.observe(document.body, { childList: true, subtree: true });
     }
@@ -48,7 +50,7 @@ const Facebook = {
     UI.remove();
     this.removeStoriesOverlay();
     this.applyReelsHiding(false);
-    this.applyReelsShelfHiding(false);
+    this.applyPeopleYouMightKnowHiding(false);
     this.restoreHiddenNavContainers();
     if (this.observer) this.observer.disconnect();
     this.observer = null;
@@ -64,7 +66,7 @@ const Facebook = {
       UI.remove();
       this.removeStoriesOverlay();
       this.applyReelsHiding(false);
-      this.applyReelsShelfHiding(false);
+      this.applyPeopleYouMightKnowHiding(false);
       this.restoreHiddenNavContainers();
       return;
     }
@@ -89,7 +91,7 @@ const Facebook = {
       UI.remove();
       this.removeStoriesOverlay();
       this.applyReelsHiding(false);
-      this.applyReelsShelfHiding(false);
+      this.applyPeopleYouMightKnowHiding(false);
       Utils.debugLog("fb", {
         path,
         mode: this.currentMode,
@@ -105,11 +107,11 @@ const Facebook = {
       isFocusActive &&
       CONFIG.visualHiding.fbReelsNav &&
       Utils.shouldApplyVisualHiding("fb");
-    const shouldHideReelsShelves =
+    const shouldHidePeopleYouMightKnow =
       isFocusActive &&
-      CONFIG.visualHiding.fbReelsShelves &&
+      CONFIG.visualHiding.fbPeopleYouMightKnow &&
       Utils.shouldApplyVisualHiding("fb");
-    const onReelsPath = path.startsWith("/reel/") || path.startsWith("/reels/");
+    const onReelsPath = this.isReelsPath(path);
     if (onReelsPath) {
       if (
         Utils.isSessionAllowed("fb", warnScope) &&
@@ -120,7 +122,7 @@ const Facebook = {
         UI.remove();
         Utils.unlockVideo();
         this.applyReelsHiding(shouldHideReelsNav);
-        this.applyReelsShelfHiding(shouldHideReelsShelves);
+        this.applyPeopleYouMightKnowHiding(shouldHidePeopleYouMightKnow);
       } else if (FocusState.isWork || CONFIG.platformSettings.fb === "strict") {
         action = "block";
         reason = FocusState.isWork ? "work timer" : "strict mode";
@@ -134,7 +136,7 @@ const Facebook = {
         );
         Utils.lockVideo();
         this.applyReelsHiding(shouldHideReelsNav);
-        this.applyReelsShelfHiding(shouldHideReelsShelves);
+        this.applyPeopleYouMightKnowHiding(shouldHidePeopleYouMightKnow);
       } else if (CONFIG.platformSettings.fb === "warn") {
         action = "warn";
         reason = "warn mode";
@@ -152,13 +154,13 @@ const Facebook = {
         );
         Utils.lockVideo();
         this.applyReelsHiding(shouldHideReelsNav);
-        this.applyReelsShelfHiding(shouldHideReelsShelves);
+        this.applyPeopleYouMightKnowHiding(shouldHidePeopleYouMightKnow);
       } else {
         action = "allow";
         UI.remove();
         Utils.unlockVideo();
         this.applyReelsHiding(shouldHideReelsNav);
-        this.applyReelsShelfHiding(shouldHideReelsShelves);
+        this.applyPeopleYouMightKnowHiding(shouldHidePeopleYouMightKnow);
       }
     } else {
       action = "safe";
@@ -166,7 +168,7 @@ const Facebook = {
       if (CONFIG.session.platform === "fb") Utils.clearSession();
       UI.remove();
       this.applyReelsHiding(shouldHideReelsNav);
-      this.applyReelsShelfHiding(shouldHideReelsShelves);
+      this.applyPeopleYouMightKnowHiding(shouldHidePeopleYouMightKnow);
       const isHomepage = path === "/" || path === "";
       const shouldHideStories =
         isHomepage &&
@@ -189,12 +191,23 @@ const Facebook = {
       reason,
     });
   },
+  isReelsPath: function (path) {
+    const normalizedPath = (path || "/").replace(/\/+$/, "") || "/";
+    return (
+      normalizedPath === "/reel" ||
+      normalizedPath.startsWith("/reel/") ||
+      normalizedPath === "/reels" ||
+      normalizedPath.startsWith("/reels/")
+    );
+  },
   getWarnScope: function (path) {
-    if (path.startsWith("/reels/")) return "reels";
-    if (path.startsWith("/reel/")) return "reel";
+    if (this.isReelsPath(path)) {
+      return path.startsWith("/reels") ? "reels" : "reel";
+    }
     return path.split("/").filter(Boolean)[0] || "home";
   },
   applyReelsHiding: function (shouldHide) {
+    Utils.pruneDetachedElements(this.hiddenNavContainers);
     if (!shouldHide) {
       this.restoreHiddenNavContainers();
       return;
@@ -224,94 +237,105 @@ const Facebook = {
     if (!reelsLink) return null;
     return reelsLink.closest("li");
   },
-  applyReelsShelfHiding: function (shouldHide) {
+  applyPeopleYouMightKnowHiding: function (shouldHide) {
+    Utils.pruneDetachedElements(this.hiddenPeopleContainers);
     if (!shouldHide) {
-      this.restoreHiddenShelfContainers();
+      this.restoreHiddenPeopleContainers();
       return;
     }
     const targets = document.querySelectorAll(
-      '[role="region"][aria-label="Reels"], [aria-label="Reels and short videos"], h3',
+      [
+        '[data-pagelet*="PeopleYouMayKnow"]',
+        '[data-pagelet*="PeopleYouMightKnow"]',
+        '[aria-label="People You May Know"]',
+        '[aria-label="People You Might Know"]',
+        'div.x1xnnf8n > div:nth-child(3)',
+        '[role="heading"]',
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+      ].join(", "),
     );
     targets.forEach((target) => {
-      const container = this.findReelsShelfContainer(target);
+      const container = this.findPeopleYouMightKnowContainer(target);
       if (!container) return;
       Utils.setInlineStyle(container, "display", "none", "important");
-      this.hiddenShelfContainers.add(container);
+      this.hiddenPeopleContainers.add(container);
     });
   },
-  findReelsShelfContainer: function (target) {
-    if (/^H[1-4]$/.test(target?.tagName || "")) {
-      const headingText = (target.textContent || "").trim();
-      if (headingText !== "Reels") return null;
-    }
-    if (
-      !target ||
-      target.closest?.(
-        '[role="navigation"], [data-pagelet="LeftRail"], [role="banner"]',
-      )
-    ) {
-      return null;
-    }
-    const exactShelf =
-      target.matches?.(
-        '[role="region"][aria-label="Reels"], [aria-label="Reels and short videos"]',
-      )
-        ? target
-        : target.closest?.(
-            '[role="region"][aria-label="Reels"], [aria-label="Reels and short videos"]',
-          );
-    let fallback = null;
-    let node = exactShelf || target;
-    let depth = 0;
-    while (node && node !== document.body && depth < 8) {
+  findPeopleYouMightKnowContainer: function (target) {
+    if (!target) return null;
+    const structuralTarget = target.matches?.(
+      'div.x1xnnf8n > div:nth-child(3)',
+    );
+    if (structuralTarget) {
+      const structuralParent = target.parentElement;
+      const structuralText = `${target.textContent || ""} ${
+        structuralParent?.textContent || ""
+      }`;
+      const hasSuggestionLink = Boolean(
+        target.querySelector?.('a[href*="/friends/suggestions"]') ||
+          structuralParent?.querySelector?.('a[href*="/friends/suggestions"]'),
+      );
+      const hasSuggestionAction = Boolean(
+        target.querySelector?.(
+          '[aria-label^="Add Friend"], [aria-label^="Remove"]',
+        ) ||
+          structuralParent?.querySelector?.(
+            '[aria-label^="Add Friend"], [aria-label^="Remove"]',
+          ),
+      );
       if (
-        node.matches?.(
-          '[role="navigation"], [data-pagelet="LeftRail"], [role="banner"], [role="main"], main',
-        )
+        /people you (may|might) know/i.test(structuralText) ||
+        (hasSuggestionLink && hasSuggestionAction)
       ) {
-        return null;
+        return target;
       }
-      if (this.isReelsShelfCandidate(node)) {
-        if (this.hasExactReelsHeading(node)) return node;
-        if (!fallback) fallback = node;
-      }
-      node = node.parentElement;
-      depth += 1;
     }
-    return fallback;
+    const label = (target.getAttribute?.("aria-label") || "").trim();
+    const heading = (target.textContent || "").trim().toLowerCase();
+    const isPeopleTarget =
+      /people you (may|might) know/i.test(label) ||
+      heading === "people you may know" ||
+      heading === "people you might know";
+    const pagelet = target.closest?.(
+      '[data-pagelet*="PeopleYouMayKnow"], [data-pagelet*="PeopleYouMightKnow"]',
+    );
+    if (pagelet && !this.isUnsafePeopleContainer(pagelet)) return pagelet;
+    if (!isPeopleTarget) return null;
+    const headingElement = target.matches?.(
+      'h1, h2, h3, h4, [role="heading"]',
+    )
+      ? target
+      : target.closest?.('h1, h2, h3, h4, [role="heading"]');
+    let candidate = headingElement || target;
+    for (let depth = 0; candidate && depth < 14; depth += 1) {
+      if (!this.isUnsafePeopleContainer(candidate)) {
+        const hasSuggestionLink = candidate.querySelector?.(
+          'a[href*="/friends/suggestions"]',
+        );
+        const hasSuggestionAction = candidate.querySelector?.(
+          '[aria-label^="Add Friend"], [aria-label^="Remove"]',
+        );
+        if (hasSuggestionLink && hasSuggestionAction) return candidate;
+      }
+      candidate = candidate.parentElement;
+    }
+    const container = target.closest?.(
+      '[role="region"], [role="complementary"], [role="article"]',
+    );
+    if (!container || this.isUnsafePeopleContainer(container)) return null;
+    return container;
   },
-  isReelsShelfCandidate: function (node) {
-    if (!node || typeof node.getBoundingClientRect !== "function") return false;
-    if (node.matches?.("body, [role='main'], main")) return false;
-    const rect = node.getBoundingClientRect();
-    const maxShelfHeight = Math.min(
-      720,
-      Math.max(window.innerHeight * 0.75, 360),
+  isUnsafePeopleContainer: function (node) {
+    return Boolean(
+      node === document.body ||
+        node === document.documentElement ||
+      node?.matches?.(
+        'body, [role="main"], main, [role="navigation"], [data-pagelet="LeftRail"], [role="banner"]',
+      ),
     );
-    const hasExactRegion = Boolean(
-      node.matches?.(
-        '[role="region"][aria-label="Reels"], [aria-label="Reels and short videos"]',
-      ) ||
-        node.querySelector?.(
-          '[role="region"][aria-label="Reels"], [aria-label="Reels and short videos"]',
-        ),
-    );
-    const reelsLinks = node.querySelectorAll?.(
-      'a[href*="/reel/"], a[href*="/reels/"]',
-    );
-    return (
-      rect.width >= 240 &&
-      rect.height >= 80 &&
-      rect.height <= maxShelfHeight &&
-      (hasExactRegion || (reelsLinks && reelsLinks.length >= 2))
-    );
-  },
-  hasExactReelsHeading: function (node) {
-    const headings = node?.querySelectorAll?.("h1, h2, h3, h4") || [];
-    return [...headings].some((el) => {
-      const text = (el.textContent || "").trim();
-      return text === "Reels";
-    });
   },
   showStoriesOverlay: function () {
     const iconUrl = Utils.getExtensionUrl("icons/icon48.png");
@@ -352,11 +376,11 @@ const Facebook = {
     );
     this.hiddenNavContainers.clear();
   },
-  restoreHiddenShelfContainers: function () {
-    this.hiddenShelfContainers.forEach((el) =>
+  restoreHiddenPeopleContainers: function () {
+    this.hiddenPeopleContainers.forEach((el) =>
       Utils.restoreInlineStyle(el, "display"),
     );
-    this.hiddenShelfContainers.clear();
+    this.hiddenPeopleContainers.clear();
   },
 };
 if (Site.isFB()) {

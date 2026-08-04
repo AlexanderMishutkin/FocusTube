@@ -17,7 +17,13 @@ const CONFIG = {
   },
   isDarkMode: true,
   timer: { end: null, type: "work" },
-  session: { allowedCount: 0, allowUntil: 0, platform: null, scope: null },
+  session: {
+    allowedCount: 0,
+    allowUntil: 0,
+    platform: null,
+    scope: null,
+    unmuteMedia: false,
+  },
   popupVisibility: { yt: true, ig: true, tt: true, fb: true, li: true },
   visualHideHidden: true,
   restrictHidden: true,
@@ -26,9 +32,10 @@ const CONFIG = {
     fbStories: true,
     ytShortsNav: true,
     ytShortsShelves: true,
+    ytMostRelevantShelf: true,
     igReelsNav: true,
     fbReelsNav: true,
-    fbReelsShelves: true,
+    fbPeopleYouMightKnow: true,
     liFeed: true,
     liAddFeed: true,
   },
@@ -66,6 +73,7 @@ const Utils = {
   intervals: [],
   observers: [],
   videoLockInterval: null,
+  mediaResumeToken: 0,
   _mediaState: new WeakMap(),
   _mediaElements: new Set(),
   _debugEnabled: false,
@@ -77,6 +85,11 @@ const Utils = {
   _inlineStyleElements: new Set(),
   isDebugEnabled: function () {
     return this._debugEnabled;
+  },
+  reportError: function (context, error) {
+    if (this._debugEnabled && typeof console !== "undefined") {
+      console.debug(`[FocusTube] ${context}`, error);
+    }
   },
   isExtensionEnabled: function () {
     return CONFIG.extensionEnabled !== false && this.isRuntimeAlive();
@@ -114,7 +127,9 @@ const Utils = {
     this.observers.forEach((observer) => {
       try {
         observer.disconnect();
-      } catch (e) {}
+      } catch (e) {
+        this.reportError("disconnecting observer", e);
+      }
     });
     this.observers = [];
   },
@@ -125,6 +140,7 @@ const Utils = {
       clearInterval(this.videoLockInterval);
       this.videoLockInterval = null;
     }
+    this.mediaResumeToken += 1;
   },
   clearInjectedStyles: function () {
     document
@@ -204,6 +220,16 @@ const Utils = {
       this._inlineStyleElements.clear();
     }
   },
+  pruneDetachedElements: function (set) {
+    if (!set || typeof set.forEach !== "function") return;
+    set.forEach((el) => {
+      if (!el || !el.isConnected) {
+        set.delete(el);
+        this._inlineStyleCache.delete(el);
+        this._inlineStyleElements.delete(el);
+      }
+    });
+  },
   hideElement: function (el) {
     if (!el) return;
     el.classList.add("ft-hidden");
@@ -248,18 +274,21 @@ const Utils = {
     this._disableHandlers.forEach((handler) => {
       try {
         handler();
-      } catch (e) {}
+      } catch (e) {
+        this.reportError("disabling platform", e);
+      }
     });
     chrome.storage.local.remove(["ft_timer_end", "ft_timer_type"], () => {
-      if (chrome.runtime.lastError) {
-      }
+      void chrome.runtime.lastError;
     });
   },
   enableExtension: function () {
     this._enableHandlers.forEach((handler) => {
       try {
         handler();
-      } catch (e) {}
+      } catch (e) {
+        this.reportError("enabling platform", e);
+      }
     });
     this.ensureBody(() => {
       if (!this.isExtensionEnabled()) return;
@@ -309,13 +338,58 @@ const Utils = {
     CONFIG.session.allowUntil = 0;
     CONFIG.session.platform = null;
     CONFIG.session.scope = null;
+    CONFIG.session.unmuteMedia = false;
     if (this.isRuntimeAlive()) chrome.storage.local.remove("session");
   },
-  setAllowWindow: function (platform, scope) {
+  setAllowWindow: function (platform, scope, options = {}) {
     CONFIG.session.allowUntil = Number.MAX_SAFE_INTEGER;
     CONFIG.session.platform = platform;
     CONFIG.session.scope = scope || null;
+    CONFIG.session.unmuteMedia = options.unmute === true;
     if (this.isRuntimeAlive()) chrome.storage.local.remove("session");
+  },
+  markKick: function (platform, done) {
+    const finish = typeof done === "function" ? done : () => {};
+    try {
+      sessionStorage.setItem("ft_kicked", "true");
+      sessionStorage.setItem("ft_kicked_time", Date.now().toString());
+    } catch (e) {
+      this.reportError("saving kick notice", e);
+    }
+    if (!platform || !this.isRuntimeAlive()) {
+      finish();
+      return;
+    }
+    chrome.storage.local.set({ [`ft_${platform}_kicked_at`]: Date.now() }, () => {
+      finish();
+    });
+  },
+  consumeKick: function (platform, callback) {
+    const showNotice = () => {
+      try {
+        sessionStorage.removeItem("ft_kicked");
+        sessionStorage.removeItem("ft_kicked_time");
+      } catch (e) {
+        this.reportError("clearing kick notice", e);
+      }
+      if (typeof callback === "function") callback();
+    };
+    try {
+      if (sessionStorage.getItem("ft_kicked")) {
+        showNotice();
+        return;
+      }
+    } catch (e) {
+      this.reportError("reading kick notice", e);
+    }
+    if (!platform || !this.isRuntimeAlive()) return;
+    const key = `ft_${platform}_kicked_at`;
+    chrome.storage.local.get([key], (res) => {
+      if (chrome.runtime.lastError) return;
+      const kickedAt = Number(res[key] || 0);
+      if (kickedAt) chrome.storage.local.remove(key);
+      if (kickedAt && Date.now() - kickedAt < 60000) showNotice();
+    });
   },
   logStat: function (key) {
     if (window !== window.top) return;
@@ -330,10 +404,11 @@ const Utils = {
     }
     try {
       chrome.runtime.sendMessage({ action: "incrementStat", amount: 1 }, () => {
-        if (chrome.runtime.lastError) {
-        }
+        void chrome.runtime.lastError;
       });
-    } catch (e) {}
+    } catch (e) {
+      this.reportError("sending stat increment", e);
+    }
   },
   clearStatKeys: function () {
     this._statKeys = null;
@@ -370,10 +445,6 @@ const Utils = {
       active && allowIg && CONFIG.visualHiding.igReelsNav,
     );
     document.body.classList.toggle(
-      "ft-hide-fb-reels-shelves",
-      active && allowFb && CONFIG.visualHiding.fbReelsShelves,
-    );
-    document.body.classList.toggle(
       "ft-hide-li-feed",
       active && allowLi && CONFIG.visualHiding.liFeed,
     );
@@ -384,11 +455,19 @@ const Utils = {
   },
   lockVideo: function () {
     if (this.videoLockInterval) clearInterval(this.videoLockInterval);
+    const lockToken = ++this.mediaResumeToken;
     const performLock = () => {
+      if (lockToken !== this.mediaResumeToken) return;
       if (!document.getElementById(UI.overlayId)) {
         Utils.unlockVideo();
         return;
       }
+      this._mediaElements.forEach((el) => {
+        if (!el.isConnected) {
+          this._mediaState.delete(el);
+          this._mediaElements.delete(el);
+        }
+      });
       document.querySelectorAll("video, audio").forEach((el) => {
         if (!this._mediaState.has(el)) {
           this._mediaState.set(el, {
@@ -403,14 +482,65 @@ const Utils = {
           el.pause();
           el.muted = true;
           el.volume = 0;
-          el.currentTime = 0;
+          try {
+            el.currentTime = 0;
+          } catch (e) {
+            this.reportError("resetting media position", e);
+          }
         }
       });
     };
     performLock();
     this.videoLockInterval = setInterval(performLock, 350);
   },
+  isVisibleVideo: function (video) {
+    if (!video || video.tagName !== "VIDEO" || !video.isConnected) return false;
+    try {
+      const style = window.getComputedStyle(video);
+      if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        style.opacity === "0"
+      ) {
+        return false;
+      }
+      const rect = video.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    } catch (e) {
+      return false;
+    }
+  },
+  chooseVisibleVideo: function (preferredVideo) {
+    if (this.isVisibleVideo(preferredVideo)) return preferredVideo;
+    const videos = Array.from(document.querySelectorAll("video"));
+    const visibleVideos = videos.filter((video) => this.isVisibleVideo(video));
+    if (!visibleVideos.length) return null;
+    return visibleVideos.sort((a, b) => {
+      const aRect = a.getBoundingClientRect();
+      const bRect = b.getBoundingClientRect();
+      const aArea = aRect.width * aRect.height;
+      const bArea = bRect.width * bRect.height;
+      return bArea - aArea;
+    })[0];
+  },
   resumeMedia: function (options = {}) {
+    const resumeToken = options.resumeToken;
+    if (resumeToken && resumeToken !== this.mediaResumeToken) return;
+    if (options.singleVideo) {
+      const activeVideo = this.chooseVisibleVideo(options.preferredVideo);
+      document.querySelectorAll("video, audio").forEach((el) => {
+        if (el !== activeVideo) el.pause();
+      });
+      if (activeVideo) {
+        if (options.unmute) {
+          activeVideo.muted = false;
+          if (activeVideo.volume === 0) activeVideo.volume = 1;
+        }
+        const playPromise = activeVideo.play();
+        if (playPromise && playPromise.catch) playPromise.catch(() => {});
+      }
+      return;
+    }
     document.querySelectorAll("video, audio").forEach((el) => {
       if (options.unmute) {
         el.muted = false;
@@ -421,11 +551,20 @@ const Utils = {
     });
   },
   unlockVideo: function (options = {}) {
+    this.mediaResumeToken += 1;
     if (this.videoLockInterval) {
       clearInterval(this.videoLockInterval);
       this.videoLockInterval = null;
     }
-    if (this._mediaElements.size) {
+    const trackedMedia = Array.from(this._mediaElements);
+    if (trackedMedia.length) {
+      const preferredVideo = options.forcePlay
+        ? this.isVisibleVideo(options.preferredVideo)
+          ? options.preferredVideo
+          : this.chooseVisibleVideo(
+              trackedMedia.find((el) => this.isVisibleVideo(el)),
+            )
+        : null;
       this._mediaElements.forEach((el) => {
         const state = this._mediaState.get(el);
         if (!state) return;
@@ -438,20 +577,73 @@ const Utils = {
         if (typeof state.currentTime === "number") {
           try {
             el.currentTime = state.currentTime;
-          } catch (e) {}
+          } catch (e) {
+            this.reportError("restoring media position", e);
+          }
         }
-        if (!state.paused || options.forcePlay) {
+        if (options.forcePlay) {
+          el.pause();
+        } else if (!state.paused) {
           const playPromise = el.play();
           if (playPromise && playPromise.catch) playPromise.catch(() => {});
         }
         this._mediaState.delete(el);
       });
       this._mediaElements.clear();
-    }
-    if (options.forcePlay) {
-      this.resumeMedia(options);
-      setTimeout(() => this.resumeMedia(options), 250);
-      setTimeout(() => this.resumeMedia(options), 1000);
+      if (options.forcePlay) {
+        const resumeToken = this.mediaResumeToken;
+        this.resumeMedia({
+          ...options,
+          singleVideo: true,
+          preferredVideo,
+          resumeToken,
+        });
+        setTimeout(
+          () =>
+            this.resumeMedia({
+              ...options,
+              singleVideo: true,
+              preferredVideo,
+              resumeToken,
+            }),
+          250,
+        );
+        setTimeout(
+          () =>
+            this.resumeMedia({
+              ...options,
+              singleVideo: true,
+              preferredVideo,
+              resumeToken,
+            }),
+          1000,
+        );
+      }
+    } else if (options.forcePlay) {
+      const resumeToken = this.mediaResumeToken;
+      this.resumeMedia({
+        ...options,
+        singleVideo: true,
+        resumeToken,
+      });
+      setTimeout(
+        () =>
+          this.resumeMedia({
+            ...options,
+            singleVideo: true,
+            resumeToken,
+          }),
+        250,
+      );
+      setTimeout(
+        () =>
+          this.resumeMedia({
+            ...options,
+            singleVideo: true,
+            resumeToken,
+          }),
+        1000,
+      );
     }
   },
   toggleFocusClass: function (isActive) {
@@ -471,18 +663,30 @@ const UI = {
   isOverlayNeeded: false,
   create: function (type, platform, onAllow, onBack, options = {}) {
     if (!Utils.isExtensionEnabled()) return;
-    if (document.getElementById(this.overlayId)) {
-      this.updateTheme();
-      if (!this.persistenceObserver)
-        this.startPersistence(type, platform, onAllow, onBack, options);
-      return;
+    const nextScope = options.scope || "";
+    const existingOverlay = document.getElementById(this.overlayId);
+    if (existingOverlay) {
+      const sameOverlay =
+        existingOverlay.dataset.ftType === type &&
+        existingOverlay.dataset.ftPlatform === platform &&
+        (existingOverlay.dataset.ftScope || "") === nextScope;
+      if (!sameOverlay) {
+        this.remove();
+      } else {
+        this.updateTheme();
+        if (!this.persistenceObserver)
+          this.startPersistence(type, platform, onAllow, onBack, options);
+        return;
+      }
     }
     this.isOverlayNeeded = true;
-    this.startPersistence(type, platform, onAllow, onBack, options);
     Utils.logStat("overlay:" + platform);
     const overlay = document.createElement("div");
     overlay.id = this.overlayId;
     overlay.className = "focus-tube-warning";
+    overlay.dataset.ftType = type;
+    overlay.dataset.ftPlatform = platform;
+    overlay.dataset.ftScope = nextScope;
     if (CONFIG.isDarkMode) overlay.classList.add("dark");
     overlay.style.cssText =
       "position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0,0,0,0.96) !important; display: flex !important; justify-content: center !important; align-items: center !important; z-index: 2147483647 !important; isolation: isolate !important;";
@@ -508,7 +712,7 @@ const UI = {
     backBtn.onclick = onBack;
     btnGroup.appendChild(backBtn);
     if (type === "warn") {
-      const watchBtn = document.createElement("button");
+    const watchBtn = document.createElement("button");
       watchBtn.className = "focus-tube-btn focus-tube-btn-secondary";
       watchBtn.textContent = "Watch Anyway";
       watchBtn.style.opacity = "0.5";
@@ -523,10 +727,13 @@ const UI = {
       }, 3000);
       watchBtn.onclick = () => {
         if (watchBtn.disabled) return;
-        Utils.setAllowWindow(platform, options.scope);
+        const shouldUnmute = ["tt", "ig"].includes(platform);
+        Utils.setAllowWindow(platform, options.scope, {
+          unmute: shouldUnmute,
+        });
         this.remove({
-          unmuteMedia: platform === "tt",
-          forcePlayMedia: platform === "ig" || platform === "fb",
+          unmuteMedia: shouldUnmute,
+          forcePlayMedia: true,
         });
         onAllow();
       };
@@ -546,6 +753,7 @@ const UI = {
     card.append(h1, p, btnGroup);
     overlay.appendChild(card);
     target.appendChild(overlay);
+    this.startPersistence(type, platform, onAllow, onBack, options);
     if (!Site.isIG() && document.body) {
       document.body.classList.add("ft-scroll-lock");
       document.documentElement.classList.add("ft-scroll-lock");
@@ -631,7 +839,23 @@ const UI = {
     toast.id = "ft-toast";
     toast.style.cssText = `position: fixed; top: 24px; right: 24px; background: #1f1f1f; color: #fff; padding: 16px 24px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 2147483647; font-family: sans-serif; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 15px; opacity: 0; transform: translateY(-20px); transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); min-width: 300px;`;
     const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
-    toast.innerHTML = `${iconUrl ? `<img src="${iconUrl}" style="width:32px;height:32px;border-radius:8px;">` : ""}<div><div style="font-weight:700;font-size:15px;margin-bottom:4px;color:#fff;">${title}</div><div style="font-size:13px;color:#aaa;line-height:1.4;">${msg}</div></div>`;
+    if (iconUrl) {
+      const icon = document.createElement("img");
+      icon.src = iconUrl;
+      icon.alt = "";
+      icon.style.cssText = "width:32px;height:32px;border-radius:8px;";
+      toast.appendChild(icon);
+    }
+    const textWrap = document.createElement("div");
+    const titleEl = document.createElement("div");
+    titleEl.textContent = title;
+    titleEl.style.cssText =
+      "font-weight:700;font-size:15px;margin-bottom:4px;color:#fff;";
+    const msgEl = document.createElement("div");
+    msgEl.textContent = msg;
+    msgEl.style.cssText = "font-size:13px;color:#aaa;line-height:1.4;";
+    textWrap.append(titleEl, msgEl);
+    toast.appendChild(textWrap);
     document.body.appendChild(toast);
     requestAnimationFrame(() => {
       toast.style.opacity = "1";
@@ -644,7 +868,9 @@ const UI = {
     }, 5000);
   },
   showKickNotification: function () {
+    document.getElementById("ft-kick-notification")?.remove();
     const n = document.createElement("div");
+    n.id = "ft-kick-notification";
     n.style.cssText = `
             position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px); 
             background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -655,7 +881,16 @@ const UI = {
             opacity: 0; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         `;
     const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
-    n.innerHTML = `${iconUrl ? `<img src="${iconUrl}" style="width:24px;height:24px;border-radius:6px;">` : ""}Strict Mode prevented access.`;
+    if (iconUrl) {
+      const icon = document.createElement("img");
+      icon.src = iconUrl;
+      icon.alt = "";
+      icon.style.cssText = "width:24px;height:24px;border-radius:6px;";
+      n.appendChild(icon);
+    }
+    const message = document.createElement("span");
+    message.textContent = "Strict Mode prevented access.";
+    n.appendChild(message);
     document.documentElement.appendChild(n);
     requestAnimationFrame(() => {
       n.style.opacity = "1";
@@ -688,9 +923,10 @@ const UI = {
       "hide_fb_stories",
       "hide_yt_shorts_nav",
       "hide_yt_shorts_shelves",
+      "hide_yt_most_relevant_shelf",
       "hide_ig_reels_nav",
       "hide_fb_reels_nav",
-      "hide_fb_reels_shelves",
+      "hide_fb_people_you_might_know",
       "hide_li_feed",
       "hide_li_addfeed",
       "ft_debug",
@@ -731,9 +967,10 @@ const UI = {
         fbStories: res.hide_fb_stories !== false,
         ytShortsNav: res.hide_yt_shorts_nav !== false,
         ytShortsShelves: res.hide_yt_shorts_shelves !== false,
+        ytMostRelevantShelf: res.hide_yt_most_relevant_shelf !== false,
         igReelsNav: res.hide_ig_reels_nav !== false,
         fbReelsNav: res.hide_fb_reels_nav !== false,
-        fbReelsShelves: res.hide_fb_reels_shelves !== false,
+        fbPeopleYouMightKnow: res.hide_fb_people_you_might_know !== false,
         liFeed: res.hide_li_feed !== false,
         liAddFeed: res.hide_li_addfeed !== false,
       };
@@ -897,6 +1134,11 @@ const UI = {
         changes.hide_yt_shorts_shelves.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
+    if (changes.hide_yt_most_relevant_shelf) {
+      CONFIG.visualHiding.ytMostRelevantShelf =
+        changes.hide_yt_most_relevant_shelf.newValue !== false;
+      Utils.applyVisualHidingClasses();
+    }
     if (changes.hide_ig_reels_nav) {
       CONFIG.visualHiding.igReelsNav =
         changes.hide_ig_reels_nav.newValue !== false;
@@ -907,9 +1149,9 @@ const UI = {
         changes.hide_fb_reels_nav.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
-    if (changes.hide_fb_reels_shelves) {
-      CONFIG.visualHiding.fbReelsShelves =
-        changes.hide_fb_reels_shelves.newValue !== false;
+    if (changes.hide_fb_people_you_might_know) {
+      CONFIG.visualHiding.fbPeopleYouMightKnow =
+        changes.hide_fb_people_you_might_know.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_li_feed) {
@@ -939,18 +1181,20 @@ const UI = {
   });
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === "TIMER_COMPLETE") {
-      if (!sender.tab && msg.target !== "content") return;
+      const isContentTimerMessage = msg.target === "content";
+      const isTabTimerMessage = Boolean(sender.tab);
+      if (!isContentTimerMessage && !isTabTimerMessage) return;
       try {
-        if (sender.tab) {
-          if (msg.type === "work") {
-            const duration = msg.breakDuration || 5;
-            UI.showToast(
-              "Focus Session Complete! 🎉",
-              `Great job! Take a ${duration}-minute break.`,
-            );
-          } else UI.showToast("Break Over! ⏰", "Time to get back to work.");
-        }
-      } catch (e) {}
+        if (msg.type === "work") {
+          const duration = msg.breakDuration || 5;
+          UI.showToast(
+            "Focus Session Complete!",
+            `Great job! Take a ${duration}-minute break.`,
+          );
+        } else UI.showToast("Break Over!", "Time to get back to work.");
+      } catch (e) {
+        Utils.reportError("showing timer notification", e);
+      }
       sendResponse({ status: "received" });
     }
   });

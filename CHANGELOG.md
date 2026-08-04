@@ -6,6 +6,18 @@ All notable project-facing changes are documented here.
 
 No unreleased changes yet.
 
+## [2.3.0] - 2026-08-04
+
+- Added a separate YouTube setting to hide the English "Most relevant" shelf on the Subscriptions page, including late-loaded shelves.
+- Tightened Facebook Strict and Warn blocking so it applies only to `/reel` and `/reels` routes; normal Facebook pages remain accessible.
+- Replaced broad Facebook Reels-shelf hiding with targeted Reels navigation, Stories, and People You Might Know hiding.
+- Added the Facebook Stories and People You Might Know controls to the popup and options page.
+- Hardened Warn-mode media recovery so the interstitial pauses page media and resumes only one visible video after "Watch Anyway."
+- Removed Facebook-specific automatic audio handling so Facebook's native mute controls remain authoritative after "Watch Anyway."
+- Removed the YouTube Warn-mode play-all fallback that could restart hidden players after the overlay was dismissed.
+- Hardened timer/stat lifecycle handling, import validation, tab messaging, and detached DOM tracking without adding permissions or telemetry.
+- Added regression and browser smoke coverage for route boundaries, dynamic hiding, settings persistence, and media recovery.
+
 ## [2.2.0] - 2026-05-10
 
 - Refined repository documentation for clearer cross-browser installation and privacy expectations.

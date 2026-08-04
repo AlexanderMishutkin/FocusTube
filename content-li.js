@@ -246,22 +246,37 @@ const LinkedIn = {
         .trim()
         .toLowerCase();
     const searchText = normalizeText(headerText);
-    const root =
-      document.querySelector("aside.scaffold-layout__aside") ||
-      document.querySelector("aside") ||
-      document.body;
-    if (!root) return null;
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_TEXT,
-      null,
-      false,
-    );
-    let node;
-    while ((node = walker.nextNode())) {
-      const text = normalizeText(node.textContent || "");
-      if (!text) continue;
-      if (text === searchText || text.includes(searchText)) {
+    const matchesHeader = (element) =>
+      normalizeText(element.textContent || "").includes(searchText);
+    const currentCard = Array.from(
+      document.querySelectorAll("div._1f3f3b6f"),
+    ).find(matchesHeader);
+    if (currentCard) return currentCard;
+
+    const roots = [
+      document.querySelector("aside.scaffold-layout__aside"),
+      ...Array.from(document.querySelectorAll("aside")),
+      document.body,
+    ].filter(Boolean);
+    const visitedRoots = new Set();
+    for (const root of roots) {
+      if (visitedRoots.has(root)) continue;
+      visitedRoots.add(root);
+      const walker = document.createTreeWalker(
+        root,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false,
+      );
+      let node;
+      while ((node = walker.nextNode())) {
+        const text = normalizeText(node.textContent || "");
+        if (!text || (text !== searchText && !text.includes(searchText))) {
+          continue;
+        }
+        const card =
+          node.parentElement && node.parentElement.closest("div._1f3f3b6f");
+        if (card && card !== root) return card;
         const artdecoCard =
           node.parentElement && node.parentElement.closest(".artdeco-card");
         if (artdecoCard && artdecoCard !== root) return artdecoCard;
@@ -276,9 +291,7 @@ const LinkedIn = {
               const hasBg =
                 bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
               const hasRadius = parseFloat(style.borderRadius) > 0;
-              if (hasBg || hasRadius) {
-                return el;
-              }
+              if (hasBg || hasRadius) return el;
             }
           }
           el = el.parentElement;

@@ -179,7 +179,7 @@ function updatePlatformVisibility(visibility) {
   const visiblePlatforms = allPlatforms.filter(
     (p) => visibility[`popup_visible_${p}`] !== false,
   );
-  platformGrid.innerHTML = "";
+  platformGrid.replaceChildren();
   let currentRow = null;
   let itemsInRow = 0;
   const rows = [];
@@ -236,12 +236,20 @@ function createPlatformButton(platform) {
   btn.dataset.platform = platform;
   btn.title = titles[platform];
   btn.setAttribute("aria-label", `${titles[platform]} settings`);
-  btn.innerHTML = `
-        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
-            <path fill="currentColor" d="${svgPaths[platform]}"/>
-        </svg>
-        <span class="platform-mode-badge" aria-hidden="true">S</span>
-    `;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "28");
+  svg.setAttribute("height", "28");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", svgPaths[platform]);
+  svg.appendChild(path);
+  const badge = document.createElement("span");
+  badge.className = "platform-mode-badge";
+  badge.setAttribute("aria-hidden", "true");
+  badge.textContent = "S";
+  btn.append(svg, badge);
   return btn;
 }
 function updatePlatformIcon(icon, mode) {
@@ -256,6 +264,7 @@ const PLATFORM_SETTINGS = {
   yt: [
     { key: "hide_yt_shorts_nav", label: "Hide Shorts Button" },
     { key: "hide_yt_shorts_shelves", label: "Hide Shorts Shelves" },
+    { key: "hide_yt_most_relevant_shelf", label: 'Hide "Most Relevant"' },
   ],
   ig: [
     { key: "hide_ig_stories", label: "Hide Stories" },
@@ -264,7 +273,10 @@ const PLATFORM_SETTINGS = {
   fb: [
     { key: "hide_fb_stories", label: "Hide Stories" },
     { key: "hide_fb_reels_nav", label: "Hide Reels Button" },
-    { key: "hide_fb_reels_shelves", label: "Hide Reels Shelves" },
+    {
+      key: "hide_fb_people_you_might_know",
+      label: "Hide People You Might Know",
+    },
   ],
   li: [
     { key: "hide_li_feed", label: "Hide Feed" },
@@ -310,7 +322,7 @@ function showPlatformDetail(platform) {
     });
   });
   const settingsContainer = document.getElementById("platformSettings");
-  settingsContainer.innerHTML = "";
+  settingsContainer.replaceChildren();
   const platformToggles = PLATFORM_SETTINGS[platform] || [];
   const performTransition = () => {
     platformDetail.classList.remove("closing");
@@ -347,13 +359,19 @@ function showPlatformDetail(platform) {
           const isChecked = result[toggle.key] !== false;
           const row = document.createElement("div");
           row.className = "platform-setting-row";
-          row.innerHTML = `
-                    <span class="platform-setting-label">${toggle.label}</span>
-                    <label class="mini-switch">
-                        <input type="checkbox" data-key="${toggle.key}" ${isChecked ? "checked" : ""}>
-                        <span class="mini-slider"></span>
-                    </label>
-                `;
+          const label = document.createElement("span");
+          label.className = "platform-setting-label";
+          label.textContent = toggle.label;
+          const switchLabel = document.createElement("label");
+          switchLabel.className = "mini-switch";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.dataset.key = toggle.key;
+          input.checked = isChecked;
+          const slider = document.createElement("span");
+          slider.className = "mini-slider";
+          switchLabel.append(input, slider);
+          row.append(label, switchLabel);
           settingsContainer.appendChild(row);
         });
         performTransition();
@@ -464,7 +482,8 @@ function setupEventListeners() {
       });
     }
   }
-  window.addEventListener("unload", cleanup);
+  window.addEventListener("pagehide", cleanup, { once: true });
+  window.addEventListener("unload", cleanup, { once: true });
 }
 function handleDocumentClick(e) {
   const platformIcon = e.target.closest(".platform-icon");
@@ -497,7 +516,11 @@ function handleCheckboxChange(e) {
   }
 }
 function cleanup() {
-  if (timerInterval) clearInterval(timerInterval);
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  timerEndTime = null;
   document.removeEventListener("click", handleDocumentClick);
   document.removeEventListener("change", handleCheckboxChange);
 }
@@ -704,10 +727,24 @@ const TutorialController = {
       this.tooltip.style.transform = "";
     }
     if (iconContainer) {
-      iconContainer.innerHTML = "";
+      iconContainer.replaceChildren();
       if (step.icon === "checkmark") {
-        iconContainer.innerHTML =
-          '<svg class="tutorial-checkmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        const svg = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "svg",
+        );
+        svg.setAttribute("class", "tutorial-checkmark");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("fill", "none");
+        svg.setAttribute("stroke", "currentColor");
+        svg.setAttribute("stroke-width", "2");
+        const polyline = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "polyline",
+        );
+        polyline.setAttribute("points", "20 6 9 17 4 12");
+        svg.appendChild(polyline);
+        iconContainer.appendChild(svg);
       } else if (step.icon) {
         const img = document.createElement("img");
         img.src = chrome.runtime.getURL(step.icon);

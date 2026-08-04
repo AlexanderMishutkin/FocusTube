@@ -56,7 +56,8 @@ const TikTok = {
       return;
     }
     const path = window.location.pathname;
-    const warnScope = this.getWarnScope(path);
+    const routePath = this.normalizePath(path);
+    const warnScope = this.getWarnScope(routePath);
     let action = "none";
     let reason = "";
     if (
@@ -66,7 +67,7 @@ const TikTok = {
       Utils.clearSession();
     }
     this.currentMode = CONFIG.platformSettings.tt;
-    if (this.isSafePage(path)) {
+    if (this.isSafePage(routePath)) {
       if (Utils.isSessionAllowed("tt")) Utils.clearSession();
       action = "remove";
       reason = "safe page";
@@ -75,7 +76,7 @@ const TikTok = {
       action = "allow";
       reason = "session allowed";
       UI.remove();
-    } else if (this.isBlockablePath(path)) {
+    } else if (this.isBlockablePath(routePath)) {
       if (FocusState.isBreak) {
         action = "remove";
         reason = "break timer";
@@ -118,7 +119,14 @@ const TikTok = {
       reason,
     });
   },
+  normalizePath: function (path) {
+    const normalized = (path || "/").replace(/\/+$/, "") || "/";
+    const locale = normalized.match(/^\/[a-z]{2}(?:-[a-z]{2})?(?=\/|$)/i);
+    if (!locale) return normalized;
+    return normalized.slice(locale[0].length) || "/";
+  },
   isSafePage: function (path) {
+    path = this.normalizePath(path);
     return (
       path.startsWith("/messages") ||
       path.startsWith("/upload") ||
@@ -128,6 +136,7 @@ const TikTok = {
     );
   },
   isBlockablePath: function (path) {
+    path = this.normalizePath(path);
     return (
       path === "/" ||
       path.startsWith("/foryou") ||
@@ -141,6 +150,7 @@ const TikTok = {
     );
   },
   getWarnScope: function (path) {
+    path = this.normalizePath(path);
     if (path === "/" || path.startsWith("/foryou")) return "foryou";
     if (path.startsWith("/following")) return "following";
     if (path.startsWith("/friends")) return "friends";
