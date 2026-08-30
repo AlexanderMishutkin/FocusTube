@@ -34,6 +34,7 @@ const CONFIG = {
     ytShortsShelves: true,
     ytMostRelevantShelf: true,
     igReelsNav: true,
+    igSuggested: true,
     fbReelsNav: true,
     fbPeopleYouMightKnow: true,
     liFeed: true,
@@ -165,7 +166,7 @@ const Utils = {
     });
     document
       .querySelectorAll(
-        ".focus-tube-warning, .ft-stories-overlay, .ft-linkedin-overlay",
+        ".focus-tube-warning, .ft-stories-overlay, .ft-linkedin-overlay, .ft-ig-stub",
       )
       .forEach((el) => el.remove());
   },
@@ -443,6 +444,10 @@ const Utils = {
     document.body.classList.toggle(
       "ft-hide-ig-reels-nav",
       active && allowIg && CONFIG.visualHiding.igReelsNav,
+    );
+    document.body.classList.toggle(
+      "ft-hide-ig-suggested",
+      active && allowIg && CONFIG.visualHiding.igSuggested,
     );
     document.body.classList.toggle(
       "ft-hide-li-feed",
@@ -925,6 +930,7 @@ const UI = {
       "hide_yt_shorts_shelves",
       "hide_yt_most_relevant_shelf",
       "hide_ig_reels_nav",
+      "hide_ig_suggested",
       "hide_fb_reels_nav",
       "hide_fb_people_you_might_know",
       "hide_li_feed",
@@ -969,6 +975,7 @@ const UI = {
         ytShortsShelves: res.hide_yt_shorts_shelves !== false,
         ytMostRelevantShelf: res.hide_yt_most_relevant_shelf !== false,
         igReelsNav: res.hide_ig_reels_nav !== false,
+        igSuggested: res.hide_ig_suggested !== false,
         fbReelsNav: res.hide_fb_reels_nav !== false,
         fbPeopleYouMightKnow: res.hide_fb_people_you_might_know !== false,
         liFeed: res.hide_li_feed !== false,
@@ -1142,6 +1149,11 @@ const UI = {
     if (changes.hide_ig_reels_nav) {
       CONFIG.visualHiding.igReelsNav =
         changes.hide_ig_reels_nav.newValue !== false;
+      Utils.applyVisualHidingClasses();
+    }
+    if (changes.hide_ig_suggested) {
+      CONFIG.visualHiding.igSuggested =
+        changes.hide_ig_suggested.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_fb_reels_nav) {

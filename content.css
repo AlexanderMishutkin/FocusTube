@@ -287,3 +287,69 @@ body.ft-platform-li aside.scaffold-layout__aside {
   border-radius: 8px;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
+
+/* Collapsed "suggested / sponsored" feed posts on Instagram.
+   The collapse itself is gated on the body class, so turning the setting off
+   reveals every post immediately, before any script has run. */
+body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed > *:not(.ft-ig-stub) {
+  display: none !important;
+}
+body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed {
+  min-height: 0 !important;
+  height: auto !important;
+}
+.ft-ig-stub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid rgba(79, 172, 254, 0.35);
+  border-radius: 10px;
+  background: rgba(79, 172, 254, 0.08);
+  font-size: 13px;
+  font-weight: 500;
+  color: #262626;
+  user-select: none !important;
+}
+.ft-ig-stub.dark {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(79, 172, 254, 0.3);
+  color: #e4e6eb;
+}
+.ft-ig-stub-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  flex: 0 0 auto;
+}
+.ft-ig-stub-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ft-ig-stub-btn {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(79, 172, 254, 0.9);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ft-ig-stub-btn:hover {
+  background: rgba(79, 172, 254, 1);
+}
+article.ft-ig-caught-up .ft-ig-stub {
+  border-color: rgba(79, 172, 254, 0.55);
+  background: rgba(79, 172, 254, 0.14);
+}
+article.ft-ig-caught-up .ft-ig-stub-label {
+  white-space: normal;
+}
