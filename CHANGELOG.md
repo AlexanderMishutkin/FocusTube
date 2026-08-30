@@ -2,6 +2,22 @@
 
 All notable project-facing changes are documented here.
 
+## [2.3.0-fork] - 2026-08-30
+
+Fork of FocusTube by malekwael229, maintained by Aleksandr Mishutkin.
+
+- Added Instagram feed filtering: posts from accounts you do not follow, and
+  sponsored posts, are replaced by a placeholder block. Offered upstream as
+  [PR #11](https://github.com/malekwael229/FocusTube/pull/11).
+- Added the same for LinkedIn: posts from outside your network, and promoted
+  posts.
+- Content scripts no longer build `chrome-extension://` URLs for their icons,
+  which removed a stream of `net::ERR_FAILED` console errors after any reload
+  of the unpacked build.
+- Rebranded this fork: name, green accent colour, and icons. Links in the
+  popup and options page point at the fork; the About section credits the
+  original project.
+
 ## [Unreleased]
 
 No unreleased changes yet.

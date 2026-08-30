@@ -120,7 +120,7 @@ const Utils = {
     plate.setAttribute("width", "60");
     plate.setAttribute("height", "60");
     plate.setAttribute("rx", "16");
-    plate.setAttribute("fill", "#4facfe");
+    plate.setAttribute("fill", "#3ddc84");
     const ring = document.createElementNS(NS, "circle");
     ring.setAttribute("cx", "32");
     ring.setAttribute("cy", "32");

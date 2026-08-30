@@ -1,13 +1,13 @@
 # Contributing
 
-Thanks for helping maintain FocusTube. This project is a live browser extension, so changes should be small, testable, and privacy-preserving.
+Thanks for helping maintain FocusTube. (This is a fork; changes meant for everyone belong in the [original project](https://github.com/malekwael229/FocusTube).) This project is a live browser extension, so changes should be small, testable, and privacy-preserving.
 
 ## Local Setup
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/malekwael229/FocusTube.git
+   git clone https://github.com/AlexanderMishutkin/FocusTube.git
    cd FocusTube
    ```
 

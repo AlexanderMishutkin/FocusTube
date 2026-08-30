@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", function () {
     hide_li_addfeed: true,
     hide_li_suggested: true,
     showBreakButton: true,
-    accentColor: "#4facfe",
+    accentColor: "#3ddc84",
   };
   const importBooleanKeys = new Set([
     ...Object.keys(defaultSettings).filter(
@@ -186,7 +186,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         document.getElementById("timeSaved").textContent = timeSavedText;
       }
-      const accentColor = items.accentColor || "#4facfe";
+      const accentColor = items.accentColor || "#3ddc84";
       applyAccentColor(accentColor);
       document.querySelectorAll(".color-preset").forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.color === accentColor);
@@ -434,13 +434,13 @@ document.addEventListener("DOMContentLoaded", function () {
   const headerGithubBtn = document.getElementById("headerGithubBtn");
   if (headerGithubBtn) {
     headerGithubBtn.addEventListener("click", function () {
-      chrome.tabs.create({ url: "https://github.com/malekwael229/FocusTube" });
+      chrome.tabs.create({ url: "https://github.com/AlexanderMishutkin/FocusTube" });
     });
   }
   const starBtn = document.getElementById("starRepo");
   if (starBtn) {
     starBtn.addEventListener("click", function () {
-      chrome.tabs.create({ url: "https://github.com/malekwael229/FocusTube" });
+      chrome.tabs.create({ url: "https://github.com/AlexanderMishutkin/FocusTube" });
     });
   }
   const rateUsBtn = document.getElementById("rateUs");
@@ -462,14 +462,32 @@ document.addEventListener("DOMContentLoaded", function () {
   if (issueBtn) {
     issueBtn.addEventListener("click", function () {
       chrome.tabs.create({
-        url: "https://github.com/malekwael229/FocusTube/issues/1",
+        url: "https://github.com/AlexanderMishutkin/FocusTube/issues",
       });
     });
+  }
+  const originalRepoBtn = document.getElementById("originalRepo");
+  if (originalRepoBtn) {
+    originalRepoBtn.addEventListener("click", function () {
+      chrome.tabs.create({ url: "https://github.com/malekwael229/FocusTube" });
+    });
+  }
+  const linkedInBtn = document.getElementById("maintainerLinkedIn");
+  if (linkedInBtn) {
+    linkedInBtn.addEventListener("click", function () {
+      chrome.tabs.create({ url: "https://www.linkedin.com/in/apmishutkin/" });
+    });
+  }
+  const aboutVersion = document.getElementById("aboutVersion");
+  if (aboutVersion) {
+    // read it from the manifest so it cannot go stale the way "2.2.0" did
+    const mf = chrome.runtime.getManifest();
+    aboutVersion.textContent = "Version " + (mf.version_name || mf.version);
   }
   const supportBtn = document.getElementById("supportProject");
   if (supportBtn) {
     supportBtn.addEventListener("click", function () {
-      chrome.tabs.create({ url: "https://github.com/malekwael229/FocusTube" });
+      chrome.tabs.create({ url: "https://github.com/AlexanderMishutkin/FocusTube" });
     });
   }
   function disableToggles(disabled) {
@@ -715,7 +733,7 @@ const modes = [
     desc: "Show a warning before entering",
     color: "#f59e0b",
   },
-  { id: "P", label: "Passive", desc: "Normal browsing", color: "#4facfe" },
+  { id: "P", label: "Passive", desc: "Normal browsing", color: "#3ddc84" },
 ];
 const modesByPlatform = {
   default: modes,
@@ -736,7 +754,7 @@ const modesByPlatform = {
       id: "P",
       label: "Passive",
       desc: "Does not hide anything",
-      color: "#4facfe",
+      color: "#3ddc84",
     },
   ],
 };

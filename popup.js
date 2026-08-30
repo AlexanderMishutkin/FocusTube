@@ -420,7 +420,7 @@ function setupEventListeners() {
   });
   if (githubBtn) {
     githubBtn.addEventListener("click", () => {
-      chrome.tabs.create({ url: "https://github.com/malekwael229/FocusTube" });
+      chrome.tabs.create({ url: "https://github.com/AlexanderMishutkin/FocusTube" });
     });
   }
   if (settingsBtn) {
@@ -750,7 +750,7 @@ const TutorialController = {
       } else if (step.icon) {
         const img = document.createElement("img");
         img.src = chrome.runtime.getURL(step.icon);
-        img.alt = "FocusTube";
+        img.alt = "FocusTube (Alex's edition)";
         iconContainer.appendChild(img);
       }
       iconContainer.classList.remove("hidden");

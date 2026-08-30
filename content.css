@@ -123,7 +123,7 @@ body.ft-hide-fb-stories.ft-platform-fb [aria-label="Previous card"] {
   background-color: transparent !important;
   box-shadow: none !important;
   border: none;
-  filter: drop-shadow(0 10px 15px rgba(79, 172, 254, 0.4));
+  filter: drop-shadow(0 10px 15px rgba(61, 220, 132, 0.4));
   user-select: none !important;
   -webkit-user-drag: none;
 }
@@ -165,7 +165,7 @@ body.ft-hide-fb-stories.ft-platform-fb [aria-label="Previous card"] {
   z-index: 2147483647;
 }
 .focus-tube-btn-primary {
-  background: #007aff !important;
+  background: #00964f !important;
   color: white !important;
 }
 .focus-tube-btn-secondary {
@@ -186,7 +186,7 @@ body.ft-scroll-lock {
   height: 64px;
   border-radius: 16px;
   margin-bottom: 16px;
-  filter: drop-shadow(0 4px 8px rgba(79, 172, 254, 0.3));
+  filter: drop-shadow(0 4px 8px rgba(61, 220, 132, 0.3));
 }
 .ft-linkedin-overlay h3 {
   font-size: 16px;
@@ -211,7 +211,7 @@ body.ft-scroll-lock {
   font-weight: 600;
   border: none;
   border-radius: 99px;
-  background: #007aff;
+  background: #00964f;
   color: #fff;
   cursor: pointer;
   transition: opacity 0.2s;
@@ -255,8 +255,8 @@ body.ft-platform-li aside.scaffold-layout__aside {
   bottom: 0;
   background: linear-gradient(
     135deg,
-    rgba(79, 172, 254, 0.95) 0%,
-    rgba(0, 242, 254, 0.95) 100%
+    rgba(61, 220, 132, 0.95) 0%,
+    rgba(0, 245, 160, 0.95) 100%
   );
   display: flex;
   flex-direction: column;
@@ -279,7 +279,7 @@ body.ft-platform-li aside.scaffold-layout__aside {
     rgba(30, 30, 30, 0.98) 0%,
     rgba(40, 40, 40, 0.98) 100%
   );
-  border: 1px solid rgba(79, 172, 254, 0.3);
+  border: 1px solid rgba(61, 220, 132, 0.3);
 }
 .ft-stories-overlay-icon {
   width: 32px;
@@ -329,7 +329,7 @@ body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed {
   height: 64px;
   flex: 0 0 auto;
   margin-bottom: 16px;
-  filter: drop-shadow(0 4px 8px rgba(79, 172, 254, 0.3));
+  filter: drop-shadow(0 4px 8px rgba(61, 220, 132, 0.3));
 }
 .ft-ig-stub h3 {
   font-size: 16px;
@@ -357,7 +357,7 @@ body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed {
   font-family: inherit;
   border: none;
   border-radius: 99px;
-  background: #007aff;
+  background: #00964f;
   color: #fff;
   cursor: pointer;
   transition: opacity 0.2s;
@@ -404,7 +404,7 @@ body.ft-hide-li-suggested.ft-platform-li .ft-li-collapsed {
   height: 64px;
   flex: 0 0 auto;
   margin-bottom: 16px;
-  filter: drop-shadow(0 4px 8px rgba(79, 172, 254, 0.3));
+  filter: drop-shadow(0 4px 8px rgba(61, 220, 132, 0.3));
 }
 .ft-li-stub h3 {
   font-size: 16px;
@@ -432,7 +432,7 @@ body.ft-hide-li-suggested.ft-platform-li .ft-li-collapsed {
   font-family: inherit;
   border: none;
   border-radius: 99px;
-  background: #007aff;
+  background: #00964f;
   color: #fff;
   cursor: pointer;
   transition: opacity 0.2s;

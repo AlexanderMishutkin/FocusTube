@@ -1,7 +1,7 @@
 <div align="center">
-  <img width="1400" height="560" alt="focustube-promotional-tile-1400x560 (2)" src="https://github.com/user-attachments/assets/14ee134e-dbbd-4649-919d-bb2e494d5fdb" />
+  <img width="96" height="96" alt="FocusTube (Alex's edition)" src="icons/icon128.png" />
 
-  # FocusTube: Distraction Blocker
+  # FocusTube (Alex's edition)
 
   **A privacy-first browser extension for reducing distracting social video and feed surfaces.**
 
@@ -9,14 +9,29 @@
 
   [Installation](#installation) | [Features](#features) | [Configuration](#configuration) | [Project Impact](#project-impact) | [Technical Highlights](#technical-highlights) | [Privacy](#privacy)
 
-  ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-  ![Version](https://img.shields.io/badge/version-2.3.0-green.svg)
+  ![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)
+  ![Version](https://img.shields.io/badge/version-2.3.0--fork-brightgreen.svg)
   ![Firefox](https://img.shields.io/badge/firefox-compatible-orange.svg)
 </div>
 
 ---
 
-**FocusTube** is an open-source browser extension built and maintained to help users reduce doomscrolling and stay focused. It blocks or hides distracting areas on supported platforms while keeping all settings and usage data local to the browser.
+> ### This is a fork
+>
+> A personal build of [FocusTube by malekwael229](https://github.com/malekwael229/FocusTube),
+> with one feature added: **the home feed is filtered down to accounts you
+> actually follow**, on both Instagram and LinkedIn. Suggested posts, "people
+> you may know" injections and sponsored posts are replaced by a placeholder
+> block; everyone you chose to follow is left alone.
+>
+> That feature has been [offered back upstream](https://github.com/malekwael229/FocusTube/pull/11).
+> Until it is merged, this fork is where it lives. Everything else — the
+> blocking modes, the timer, the per-platform controls — is the original
+> project's work.
+>
+> Maintained by [Aleksandr Mishutkin](https://www.linkedin.com/in/apmishutkin/).
+
+**FocusTube** is an open-source browser extension that helps users reduce doomscrolling and stay focused. It blocks or hides distracting areas on supported platforms while keeping all settings and usage data local to the browser.
 
 The project supports Chromium browsers with a Manifest V3 build and Firefox with a separate compatibility manifest.
 
@@ -32,9 +47,11 @@ The project supports Chromium browsers with a Manifest V3 build and Firefox with
 
 - **YouTube:** Blocks Shorts URLs and can hide Shorts navigation/shelves plus the English "Most relevant" shelf on the Subscriptions page.
 - **Instagram:** Blocks Reels/Explore paths and can hide Reels navigation and Stories.
+  **(this fork)** Can hide feed posts from accounts you do not follow, and sponsored posts.
 - **TikTok:** Blocks common feed/video surfaces while allowing safer areas such as messages and settings.
 - **Facebook:** Blocks Reels paths and can hide Reels navigation, Stories, and People You Might Know suggestions.
 - **LinkedIn:** Can hide the main feed and "Add to your feed" sidebar card.
+  **(this fork)** Can hide feed posts from outside your network, and promoted posts.
 
 ### Productivity Tools
 
@@ -49,9 +66,14 @@ The project supports Chromium browsers with a Manifest V3 build and Firefox with
 
 ### Official Stores
 
+This fork is **not** published to any store. The listings below install the
+original FocusTube, which does not include the feed filtering:
+
 - **Chrome Web Store:** [FocusTube](https://chromewebstore.google.com/detail/focustube-distraction-blo/ppdjgkniggbikifojmkindmbhppmoell)
 - **Microsoft Edge Add-ons:** [FocusTube](https://microsoftedge.microsoft.com/addons/detail/focustube/emffahlehkfdlknpmpndaabhigchhoog)
 - **Firefox Add-ons:** [FocusTube](https://addons.mozilla.org/addon/focus-tube/)
+
+To get this build, load it unpacked as described below.
 
 ### Manual Installation
 
