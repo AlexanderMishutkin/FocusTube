@@ -361,6 +361,11 @@ const IGFeed = {
   // After this many hidden posts in a row there is nothing left but
   // suggestions, so the feed is ended rather than scrolled through.
   END_FEED_AFTER: 8,
+  // Below Instagram's own "Suggested Posts" divider it has already said there
+  // is nothing left from people you follow, so end it sooner. This does not
+  // depend on an unbroken run surviving virtualisation, which the run counter
+  // does.
+  END_FEED_AFTER_DIVIDER: 3,
   MAX_STUB_REPAIRS: 3,
   TICK_INTERVAL_MS: 100,
   UNBOUNDED_SCAN: 20,
@@ -517,6 +522,7 @@ const IGFeed = {
     let pastDivider = false;
     let seenPost = false;
     let run = 0;
+    let belowDivider = 0;
     let endAt = null;
 
     nodes.forEach((node) => {
@@ -557,11 +563,29 @@ const IGFeed = {
         collapsedThisTick += 1;
       }
       run += 1;
-      if (run >= this.END_FEED_AFTER && !endAt) endAt = post;
+      if (pastDivider) belowDivider += 1;
+      if (
+        !endAt &&
+        (run >= this.END_FEED_AFTER ||
+          belowDivider >= this.END_FEED_AFTER_DIVIDER)
+      ) {
+        endAt = post;
+      }
     });
 
     if (endAt && !this.endBypass) this.endFeed(endAt);
     else this.clearEnd();
+
+    Utils.debugLog("ig-feed", {
+      root: this.root ? this.root.tagName.toLowerCase() : null,
+      posts: nodes.length,
+      hidden: this.collapsed.size,
+      run,
+      pastDivider,
+      belowDivider,
+      ended: !!this.endedAt,
+      tailHidden: this.truncatedTail.size,
+    });
   },
   postChrome: function (post) {
     // Feed posts carry no <header>. The like/comment/share <section> is the
