@@ -37,6 +37,7 @@ const LinkedIn = {
         changes.ft_timer_type ||
         changes.hide_li_feed ||
         changes.hide_li_addfeed ||
+        changes.hide_li_suggested ||
         changes.popup_visible_li ||
         changes.restrictHiddenPlatforms ||
         changes.visualHideHiddenPlatforms
@@ -66,6 +67,7 @@ const LinkedIn = {
     }
     this.removeAllOverlays();
     this.clearDismissalFlags();
+    LIFeed.disable();
     if (this.observer) this.observer.disconnect();
     this.observer = null;
   },
@@ -77,6 +79,7 @@ const LinkedIn = {
   },
   runChecks: function () {
     if (!Utils.isExtensionEnabled()) {
+      LIFeed.disable();
       this.removeAllOverlays();
       return;
     }
@@ -96,6 +99,7 @@ const LinkedIn = {
     if (!FocusState.shouldBlock) {
       action = "remove";
       reason = "focus not active";
+      LIFeed.sync();
       this.removeAllOverlays();
       Utils.debugLog("li", {
         path,
@@ -179,6 +183,7 @@ const LinkedIn = {
     } else {
       this.removeSidebarOverlays();
     }
+    LIFeed.sync();
     Utils.debugLog("li", {
       path,
       mode: this.currentMode,
@@ -418,6 +423,353 @@ const LinkedIn = {
     this.removeFeedOverlay();
     this.removeSidebarOverlays();
     UI.remove();
+  },
+};
+/* --------------------------------------------------------------------------
+ * LIFeed - hide feed posts from people you are not connected to.
+ *
+ * Same shape as the Instagram module, and deliberately so: every mark is a
+ * data attribute or a class, never an inline style. LinkedIn re-renders its
+ * feed nodes and blanks their style attribute; attributes survive.
+ *
+ * Two signals, both structural rather than textual, because the interface is
+ * not always in English:
+ *   - a Follow control in the post header. LinkedIn only offers it for people
+ *     you do not already follow, which is the question being asked. It is
+ *     found by the plus icon it contains (svg id "add-small"), not by its
+ *     label.
+ *   - a call-to-action leaving LinkedIn directly. Organic posts route external
+ *     links through linkedin.com/safety/go/; only promoted posts link straight
+ *     out. Backed up by the "Promoted" label where the language matches.
+ * ------------------------------------------------------------------------ */
+const LIFeed = {
+  COLLAPSED_CLASS: "ft-li-collapsed",
+  STUB_CLASS: "ft-li-stub",
+  FOLLOW_ICON: 'svg[id="add-small"]',
+  MIN_COLLAPSED_HEIGHT: 260,
+  MAX_COLLAPSE_PER_TICK: 8,
+  MAX_STUB_REPAIRS: 3,
+  TICK_INTERVAL_MS: 100,
+  PROMOTED_LABELS: ["promoted", "sponsored"],
+
+  observer: null,
+  root: null,
+  collapsed: new Set(),
+  scheduled: false,
+  trailingTimer: null,
+  lastTick: 0,
+  lastPath: null,
+  lastRevealAllowed: null,
+  active: false,
+
+  norm: function (text) {
+    return (text || "").replace(/\s+/g, " ").trim();
+  },
+  isFeedPath: function (path) {
+    return path === "/" || path === "" || path.startsWith("/feed");
+  },
+  revealAllowed: function () {
+    if (FocusState.isWork) return false;
+    return CONFIG.platformSettings.li !== "strict";
+  },
+  shouldRun: function () {
+    return (
+      Utils.isExtensionEnabled() &&
+      this.isFeedPath(window.location.pathname) &&
+      FocusState.shouldBlock &&
+      CONFIG.visualHiding.liSuggested &&
+      Utils.shouldApplyVisualHiding("li")
+    );
+  },
+  sync: function () {
+    const path = window.location.pathname;
+    if (path !== this.lastPath) this.lastPath = path;
+    if (this.shouldRun()) this.enable();
+    else this.disable();
+  },
+  enable: function () {
+    this.active = true;
+    this.ensureObserver();
+    this.schedule();
+  },
+  disable: function () {
+    if (!this.active && !this.collapsed.size) return;
+    this.active = false;
+    if (this.observer) this.observer.disconnect();
+    this.root = null;
+    if (this.trailingTimer) {
+      clearTimeout(this.trailingTimer);
+      this.trailingTimer = null;
+    }
+    this.scheduled = false;
+    this.restoreAll();
+  },
+  findFeedRoot: function () {
+    return document.querySelector("main") || null;
+  },
+  ensureObserver: function () {
+    const root = this.findFeedRoot();
+    if (!root) return;
+    if (!this.observer) {
+      this.observer = Utils.trackObserver(
+        new MutationObserver((records) => {
+          for (const record of records) {
+            if (!record.addedNodes.length) continue;
+            const target = record.target;
+            const post =
+              target && target.nodeType === 1
+                ? target.closest('[role="listitem"]')
+                : null;
+            if (post && post.dataset.ftLiClass) continue;
+            this.schedule();
+            return;
+          }
+        }),
+      );
+    }
+    if (this.root !== root) {
+      this.observer.disconnect();
+      this.root = root;
+      this.observer.observe(root, { childList: true, subtree: true });
+    }
+  },
+  schedule: function () {
+    if (!this.active || this.scheduled) return;
+    this.scheduled = true;
+    const wait = Math.max(
+      0,
+      this.TICK_INTERVAL_MS - (Date.now() - this.lastTick),
+    );
+    const run = () => {
+      this.trailingTimer = null;
+      this.lastTick = Date.now();
+      requestAnimationFrame(() => {
+        this.scheduled = false;
+        this.tick();
+      });
+    };
+    if (wait === 0) run();
+    else this.trailingTimer = setTimeout(run, wait);
+  },
+  posts: function () {
+    // Top-level feed items only. A reshared post nests another listitem, and
+    // judging the inner one would collapse a piece of an outer post.
+    return [...this.root.querySelectorAll('[role="listitem"]')].filter(
+      (el) => !el.parentElement || !el.parentElement.closest('[role="listitem"]'),
+    );
+  },
+  tick: function () {
+    if (!this.active) return;
+    if (!this.shouldRun()) {
+      this.disable();
+      return;
+    }
+    this.ensureObserver();
+    if (!this.root) return;
+    Utils.pruneDetachedElements(this.collapsed);
+
+    const revealAllowed = this.revealAllowed();
+    if (revealAllowed !== this.lastRevealAllowed) {
+      this.lastRevealAllowed = revealAllowed;
+      this.collapsed.forEach((post) =>
+        this.renderStub(post, post.dataset.ftLiClass),
+      );
+    }
+
+    let collapsedThisTick = 0;
+    this.posts().forEach((post) => {
+      if (post.dataset.ftLiGiveUp === "1") {
+        if (this.collapsed.has(post)) this.restore(post);
+        return;
+      }
+      if (post.dataset.ftLiReveal === "1") {
+        if (revealAllowed) {
+          if (this.collapsed.has(post)) this.restore(post);
+          return;
+        }
+        delete post.dataset.ftLiReveal;
+      }
+      const kind = this.classify(post);
+      if (kind === "pending") return;
+      if (kind === "keep") {
+        if (this.collapsed.has(post)) this.restore(post);
+        return;
+      }
+      if (this.collapsed.has(post)) {
+        this.repairStub(post, kind);
+        return;
+      }
+      if (collapsedThisTick >= this.MAX_COLLAPSE_PER_TICK) return;
+      this.collapse(post, kind);
+      collapsedThisTick += 1;
+    });
+  },
+  followButton: function (post) {
+    const buttons = post.querySelectorAll("button");
+    for (const button of buttons) {
+      if (button.querySelector(this.FOLLOW_ICON)) return button;
+    }
+    return null;
+  },
+  outboundCta: function (post) {
+    // Promoted posts link straight out; organic external links are wrapped in
+    // linkedin.com/safety/go/ first.
+    const links = post.querySelectorAll('a[href^="http"]');
+    for (const link of links) {
+      const href = link.getAttribute("href") || "";
+      if (!/^https?:\/\//i.test(href)) continue;
+      const host = href
+        .replace(/^https?:\/\//i, "")
+        .split(/[/?#]/)[0]
+        .toLowerCase();
+      if (host === "linkedin.com" || host.endsWith(".linkedin.com")) continue;
+      if (host.endsWith("licdn.com")) continue;
+      return link;
+    }
+    return null;
+  },
+  isRendered: function (post) {
+    // The action bar is the last thing to paint, so its presence means the
+    // header - and any Follow control in it - has already been rendered.
+    return (
+      !!post.querySelector('a[href*="/in/"], a[href*="/company/"]') &&
+      !!post.querySelector('svg[id="thumbs-up-outline-small"]')
+    );
+  },
+  author: function (post) {
+    // The header's own aria-label, e.g. "Almaz Salyakhov, Open to work
+    // Verified Profile 2nd". Taking the first profile link instead picks up
+    // the "Followed by ..." line above the post, which names whoever surfaced
+    // it rather than who wrote it.
+    const labelled = post.querySelector(
+      'a[href*="/in/"] [aria-label], a[href*="/company/"] [aria-label]',
+    );
+    if (labelled) {
+      const label = this.norm(labelled.getAttribute("aria-label")).split(",")[0];
+      if (label) return label.slice(0, 60);
+    }
+    const links = post.querySelectorAll('a[href*="/in/"], a[href*="/company/"]');
+    for (const link of links) {
+      const name = this.norm(link.textContent);
+      if (name) return name.slice(0, 60);
+    }
+    return null;
+  },
+  classify: function (post) {
+    const cached = post.dataset.ftLiClass;
+    if (cached === "ad" || cached === "suggested" || cached === "keep") {
+      return cached;
+    }
+    const rendered = this.isRendered(post);
+    const text = this.norm(post.textContent).toLowerCase();
+    const promoted = this.PROMOTED_LABELS.some((label) => text.includes(label));
+    if (this.outboundCta(post) && (promoted || !post.querySelector("time"))) {
+      post.dataset.ftLiClass = "ad";
+      return "ad";
+    }
+    if (rendered && this.followButton(post)) {
+      post.dataset.ftLiClass = "suggested";
+      return "suggested";
+    }
+    // Fail open: nothing is judged until the post has actually painted.
+    if (rendered) {
+      post.dataset.ftLiClass = "keep";
+      return "keep";
+    }
+    return "pending";
+  },
+  measureHeight: function (post) {
+    const height = Math.round(post.getBoundingClientRect().height);
+    return Math.max(height, this.MIN_COLLAPSED_HEIGHT);
+  },
+  collapse: function (post, kind) {
+    post.dataset.ftLiHeight = String(this.measureHeight(post));
+    post.classList.add(this.COLLAPSED_CLASS);
+    this.collapsed.add(post);
+    this.renderStub(post, kind);
+  },
+  restore: function (post) {
+    if (!post) return;
+    post.classList.remove(this.COLLAPSED_CLASS);
+    delete post.dataset.ftLiHeight;
+    post
+      .querySelectorAll(":scope > ." + this.STUB_CLASS)
+      .forEach((el) => el.remove());
+    this.collapsed.delete(post);
+  },
+  restoreAll: function () {
+    [...this.collapsed].forEach((post) => this.restore(post));
+    this.collapsed.clear();
+    this.lastRevealAllowed = null;
+    document
+      .querySelectorAll("." + this.COLLAPSED_CLASS)
+      .forEach((post) => this.restore(post));
+    document
+      .querySelectorAll("." + this.STUB_CLASS)
+      .forEach((el) => el.remove());
+  },
+  repairStub: function (post, kind) {
+    if (post.querySelector(":scope > ." + this.STUB_CLASS)) return;
+    const attempts = parseInt(post.dataset.ftLiStubs || "0", 10);
+    if (attempts >= this.MAX_STUB_REPAIRS) {
+      post.dataset.ftLiGiveUp = "1";
+      this.restore(post);
+      return;
+    }
+    this.renderStub(post, kind);
+  },
+  renderStub: function (post, kind) {
+    let stub = post.querySelector(":scope > ." + this.STUB_CLASS);
+    if (!stub) {
+      stub = document.createElement("div");
+      stub.className = this.STUB_CLASS;
+      if (CONFIG.isDarkMode) stub.classList.add("dark");
+      post.appendChild(stub);
+      post.dataset.ftLiStubs = String(
+        parseInt(post.dataset.ftLiStubs || "0", 10) + 1,
+      );
+    }
+    while (stub.firstChild) stub.removeChild(stub.firstChild);
+    const height = parseInt(post.dataset.ftLiHeight || "0", 10);
+    if (height > 0) {
+      stub.style.setProperty("height", height + "px", "important");
+    }
+
+    const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
+    if (iconUrl) {
+      const icon = document.createElement("img");
+      icon.src = iconUrl;
+      icon.alt = "";
+      icon.className = "ft-li-stub-icon";
+      stub.appendChild(icon);
+    }
+    const title = document.createElement("h3");
+    title.textContent = kind === "ad" ? "Promoted post" : "Not in your network";
+    stub.appendChild(title);
+
+    const subtitle = document.createElement("p");
+    const author = this.author(post);
+    subtitle.textContent =
+      kind === "ad"
+        ? "We're keeping you productive."
+        : author
+          ? author + " is not someone you follow."
+          : "Not from someone you follow.";
+    stub.appendChild(subtitle);
+
+    if (this.revealAllowed()) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ft-li-stub-btn";
+      button.textContent = "View Anyway";
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        post.dataset.ftLiReveal = "1";
+        this.restore(post);
+      });
+      stub.appendChild(button);
+    }
   },
 };
 if (Site.isLI()) {

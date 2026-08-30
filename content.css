@@ -365,3 +365,86 @@ body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed {
 .ft-ig-stub-btn:hover {
   opacity: 0.85;
 }
+
+/* Everything below the "You're all caught up" card - posts, and Instagram's
+   load-more sentinel with them. Driven by an attribute rather than an inline
+   style, because Instagram blanks the style attribute on its own nodes when
+   it re-renders them. Attributes survive. */
+body.ft-hide-ig-suggested.ft-platform-ig [data-ft-ig-cut="1"] {
+  display: none !important;
+}
+
+/* LinkedIn: posts from outside your network, and promoted posts. Same shape
+   as the Instagram blocks - the collapse is gated on the body class so
+   turning the setting off reveals everything before any script runs, and the
+   height lives on our own stub because LinkedIn blanks the style attribute on
+   its own nodes. */
+body.ft-hide-li-suggested.ft-platform-li
+  .ft-li-collapsed
+  > *:not(.ft-li-stub) {
+  display: none !important;
+}
+body.ft-hide-li-suggested.ft-platform-li .ft-li-collapsed {
+  display: block !important;
+  box-sizing: border-box !important;
+}
+.ft-li-stub {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+  user-select: none !important;
+}
+.ft-li-stub.dark {
+  background: #1b1f23;
+  border-color: #38434f;
+}
+.ft-li-stub-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 4px 8px rgba(79, 172, 254, 0.3));
+}
+.ft-li-stub h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: #1d1d1f;
+}
+.ft-li-stub.dark h3 {
+  color: #fff;
+}
+.ft-li-stub p {
+  font-size: 13px;
+  color: #6e6e73;
+  margin: 0 0 16px 0;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+.ft-li-stub.dark p {
+  color: #a0a0a0;
+}
+.ft-li-stub-btn {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 99px;
+  background: #007aff;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.ft-li-stub-btn:hover {
+  opacity: 0.85;
+}

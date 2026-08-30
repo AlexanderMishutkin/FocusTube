@@ -374,6 +374,10 @@ const IGFeed = {
   // post from someone you follow and the suggestions below. The illustration
   // is a fixed asset path - not a hashed class, not a heading that could be
   // anything else, and identical in every interface language.
+  //
+  // It is also temporary: Instagram unmounts the card once it scrolls out of
+  // view. So being past it cannot be recomputed each pass - it is recorded on
+  // the posts themselves, and outlives the card.
   DIVIDER_MARK: 'img[src*="illo-confirm-refresh"]',
   NON_PROFILE_PATH:
     /^\/(explore|reel|reels|direct|stories|accounts|p|about|legal|privacy)(\/|$)/,
@@ -386,6 +390,9 @@ const IGFeed = {
   trailingTimer: null,
   lastTick: 0,
   lastPath: null,
+  sawDivider: false,
+  tail: new Set(),
+  endedAt: null,
   active: false,
 
   norm: function (text) {
@@ -493,6 +500,7 @@ const IGFeed = {
     this.ensureObserver();
     if (!this.root) return;
     Utils.pruneDetachedElements(this.collapsed);
+    Utils.pruneDetachedElements(this.tail);
 
     // Switching between strict and warn changes whether the stubs offer a way
     // through, so redraw the ones already on screen.
@@ -509,18 +517,30 @@ const IGFeed = {
     // ("Suggested Posts"); every post below it is a suggestion, whatever its
     // own markup says. Only honoured after a real post has gone by, so a
     // stray heading above the feed can never blank the whole thing.
-    // Posts and the caught-up card together, in document order.
-    const nodes = this.root.querySelectorAll("article, " + this.DIVIDER_MARK);
+    // Posts and the caught-up card together, in document order. Queried from
+    // the document rather than the feed root, so where Instagram chooses to
+    // put the card is not another assumption to get wrong; posts outside the
+    // feed are skipped below.
+    const nodes = document.querySelectorAll("article, " + this.DIVIDER_MARK);
     let collapsedThisTick = 0;
     let pastDivider = false;
     let run = 0;
+    let firstBelow = null;
 
     nodes.forEach((node) => {
       if (node.tagName === "IMG") {
         pastDivider = true;
+        this.sawDivider = true;
         return;
       }
       const post = node;
+      if (!this.root.contains(post)) return;
+      if (pastDivider && !firstBelow) firstBelow = post;
+      // Either we have just walked past the card, or this post was stamped on
+      // an earlier pass while the card still existed. Both mean everything
+      // from here down is a suggestion.
+      if (post.dataset.ftIgBelow === "1") pastDivider = true;
+      else if (pastDivider) post.dataset.ftIgBelow = "1";
       if (post.dataset.ftIgGiveUp === "1") {
         run = 0;
         if (this.collapsed.has(post)) this.restore(post);
@@ -554,6 +574,8 @@ const IGFeed = {
       run += 1;
     });
 
+    this.endFeed(firstBelow);
+
     // Written to the body every pass, so the state can be read from the page
     // console with `document.body.dataset.ftIgFeed` - no extension APIs, no
     // debug flag. Attribute writes do not feed back into our own observer,
@@ -564,9 +586,13 @@ const IGFeed = {
       hidden: this.collapsed.size,
       run,
       pastDivider,
-      // 0 means the caught-up card is not under the feed root, and nothing
-      // downstream of it can work.
-      dividerMarks: this.root.querySelectorAll(this.DIVIDER_MARK).length,
+      // The card is transient, so 0 here is normal once it has scrolled away.
+      dividerMarks: document.querySelectorAll(this.DIVIDER_MARK).length,
+      sawDivider: this.sawDivider,
+      belowStamped: this.root.querySelectorAll('article[data-ft-ig-below="1"]')
+        .length,
+      ended: !!this.endedAt,
+      cut: document.querySelectorAll('[data-ft-ig-cut="1"]').length,
       stubsSized: this.root.querySelectorAll(".ft-ig-stub[style]").length,
       docHeight: document.scrollingElement
         ? document.scrollingElement.scrollHeight
@@ -671,6 +697,57 @@ const IGFeed = {
     }
     return "pending";
   },
+  endFeed: function (post) {
+    // The caught-up card says there is nothing below it but suggestions, so
+    // the feed ends at the first post under it. Everything after is marked and
+    // hidden by stylesheet - including Instagram's load-more sentinel, and an
+    // IntersectionObserver does not fire for a display:none element, so the
+    // pagination requests stop rather than just their results being thrown
+    // away.
+    //
+    // Marked with attributes, never inline styles: Instagram blanks the style
+    // attribute on its own nodes when it re-renders them, which is what
+    // defeated every earlier attempt at this. Attributes survive.
+    if (this.endedAt === post) {
+      if (post) this.markTail(post);
+      return;
+    }
+    this.clearEnd();
+    this.endedAt = post;
+    if (!post) return;
+    post.dataset.ftIgEnd = "1";
+    this.markTail(post);
+    if (this.collapsed.has(post)) this.renderStub(post, post.dataset.ftIgClass);
+  },
+  markTail: function (post) {
+    let node = post;
+    while (node && node !== this.root && node.parentElement) {
+      let sibling = node.nextElementSibling;
+      while (sibling) {
+        if (sibling.dataset.ftIgCut !== "1") {
+          sibling.dataset.ftIgCut = "1";
+          this.tail.add(sibling);
+        }
+        sibling = sibling.nextElementSibling;
+      }
+      node = node.parentElement;
+    }
+  },
+  clearEnd: function () {
+    this.tail.forEach((el) => delete el.dataset.ftIgCut);
+    this.tail.clear();
+    document
+      .querySelectorAll('[data-ft-ig-cut="1"]')
+      .forEach((el) => delete el.dataset.ftIgCut);
+    const ended = this.endedAt;
+    this.endedAt = null;
+    if (ended) {
+      delete ended.dataset.ftIgEnd;
+      if (ended.isConnected && this.collapsed.has(ended)) {
+        this.renderStub(ended, ended.dataset.ftIgClass);
+      }
+    }
+  },
   feedList: function (post) {
     // The lowest ancestor holding more than one post: the list Instagram
     // appends to. Used to tell its "Suggested Posts" divider apart from a
@@ -713,6 +790,11 @@ const IGFeed = {
     [...this.collapsed].forEach((post) => this.restore(post));
     this.collapsed.clear();
     this.lastRevealAllowed = null;
+    this.sawDivider = false;
+    this.clearEnd();
+    document
+      .querySelectorAll('article[data-ft-ig-below="1"]')
+      .forEach((post) => delete post.dataset.ftIgBelow);
     document
       .querySelectorAll("." + this.COLLAPSED_CLASS)
       .forEach((post) => this.restore(post));
@@ -756,14 +838,20 @@ const IGFeed = {
       stub.appendChild(icon);
     }
 
+    const isEnd = post.dataset.ftIgEnd === "1";
     const title = document.createElement("h3");
-    title.textContent = kind === "ad" ? "Sponsored post" : "Suggested post";
+    title.textContent = isEnd
+      ? "That's everyone you follow"
+      : kind === "ad"
+        ? "Sponsored post"
+        : "Suggested post";
     stub.appendChild(title);
 
     const subtitle = document.createElement("p");
     const author = this.author(post);
-    subtitle.textContent =
-      kind === "ad"
+    subtitle.textContent = isEnd
+      ? "Instagram has nothing left but suggestions, so the feed ends here."
+      : kind === "ad"
         ? "We're keeping you productive."
         : author
           ? "@" + author + " is not someone you follow."

@@ -282,6 +282,7 @@ const PLATFORM_SETTINGS = {
   li: [
     { key: "hide_li_feed", label: "Hide Feed" },
     { key: "hide_li_addfeed", label: 'Hide "Add to Your Feed"' },
+    { key: "hide_li_suggested", label: "Hide Outside Your Network" },
   ],
   tt: [],
 };

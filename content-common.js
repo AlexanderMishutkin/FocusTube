@@ -39,6 +39,7 @@ const CONFIG = {
     fbPeopleYouMightKnow: true,
     liFeed: true,
     liAddFeed: true,
+    liSuggested: true,
   },
 };
 const FocusState = {
@@ -166,7 +167,7 @@ const Utils = {
     });
     document
       .querySelectorAll(
-        ".focus-tube-warning, .ft-stories-overlay, .ft-linkedin-overlay, .ft-ig-stub",
+        ".focus-tube-warning, .ft-stories-overlay, .ft-linkedin-overlay, .ft-ig-stub, .ft-li-stub",
       )
       .forEach((el) => el.remove());
   },
@@ -456,6 +457,10 @@ const Utils = {
     document.body.classList.toggle(
       "ft-hide-li-addfeed",
       active && allowLi && CONFIG.visualHiding.liAddFeed,
+    );
+    document.body.classList.toggle(
+      "ft-hide-li-suggested",
+      active && allowLi && CONFIG.visualHiding.liSuggested,
     );
   },
   lockVideo: function () {
@@ -935,6 +940,7 @@ const UI = {
       "hide_fb_people_you_might_know",
       "hide_li_feed",
       "hide_li_addfeed",
+      "hide_li_suggested",
       "ft_debug",
     ],
     (res) => {
@@ -980,6 +986,7 @@ const UI = {
         fbPeopleYouMightKnow: res.hide_fb_people_you_might_know !== false,
         liFeed: res.hide_li_feed !== false,
         liAddFeed: res.hide_li_addfeed !== false,
+        liSuggested: res.hide_li_suggested !== false,
       };
       Utils._debugEnabled = res.ft_debug === true;
       Utils.ensureBody(() => {
@@ -1168,6 +1175,11 @@ const UI = {
     }
     if (changes.hide_li_feed) {
       CONFIG.visualHiding.liFeed = changes.hide_li_feed.newValue !== false;
+      Utils.applyVisualHidingClasses();
+    }
+    if (changes.hide_li_suggested) {
+      CONFIG.visualHiding.liSuggested =
+        changes.hide_li_suggested.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_li_addfeed) {

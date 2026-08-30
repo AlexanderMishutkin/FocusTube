@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", function () {
     hide_fb_people_you_might_know: true,
     hide_li_feed: true,
     hide_li_addfeed: true,
+    hide_li_suggested: true,
     showBreakButton: true,
     accentColor: "#4facfe",
   };
@@ -692,6 +693,11 @@ const platforms = {
         id: "hide_li_addfeed",
         label: "Hide Add to Feed",
         desc: "Hide suggested follows",
+      },
+      {
+        id: "hide_li_suggested",
+        label: "Hide Posts Outside Your Network",
+        desc: "Collapse feed posts from people you do not follow, and promoted posts",
       },
     ],
   },
