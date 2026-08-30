@@ -360,8 +360,8 @@ const IGFeed = {
   MAX_COLLAPSE_PER_TICK: 12,
   MAX_STUB_REPAIRS: 3,
   TICK_INTERVAL_MS: 250,
-  HEADER_LOOKAHEAD: 8,
-  HEADERLESS_SCAN: 12,
+  UNBOUNDED_SCAN: 20,
+  MAX_BUTTON_TEXT: 24,
   ZERO_WIDTH: /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g,
   SPONSORED_LABELS: ["sponsored", "paid partnership"],
   SUGGESTED_LABELS: [
@@ -474,18 +474,31 @@ const IGFeed = {
     if (!this.root) return;
     Utils.pruneDetachedElements(this.collapsed);
 
-    const posts = this.root.querySelectorAll("article");
+    // Articles and section headings together, in document order. Instagram
+    // ends the followed part of the feed with a divider carrying an <h3>
+    // ("Suggested Posts"); every post below it is a suggestion, whatever its
+    // own markup says. Only honoured after a real post has gone by, so a
+    // stray heading above the feed can never blank the whole thing.
+    const nodes = this.root.querySelectorAll("article, h3");
     let streak = 0;
     let collapsedThisTick = 0;
     let caughtUpAt = null;
+    let pastDivider = false;
+    let seenPost = false;
 
-    posts.forEach((post) => {
+    nodes.forEach((node) => {
+      if (node.tagName === "H3") {
+        if (seenPost && !node.closest("article")) pastDivider = true;
+        return;
+      }
+      const post = node;
+      seenPost = true;
       if (post.dataset.ftIgReveal === "1" || post.dataset.ftIgGiveUp === "1") {
         streak = 0;
         if (this.collapsed.has(post)) this.restore(post);
         return;
       }
-      const kind = this.classify(post);
+      const kind = this.classify(post, pastDivider);
       // "pending" means the post has not painted its header yet - leave the
       // streak alone and look again on the next tick.
       if (kind === "pending") return;
@@ -511,31 +524,50 @@ const IGFeed = {
 
     this.markCaughtUp(caughtUpAt);
   },
+  postChrome: function (post) {
+    // Feed posts carry no <header>. The like/comment/share <section> is the
+    // one stable landmark, and everything above it - avatar, username, time,
+    // follow control, any "Suggested"/"Sponsored" label - is the post's own
+    // chrome. Everything below is the caption and its trimmings.
+    return post.querySelector("section");
+  },
+  inChrome: function (boundary, node) {
+    if (!boundary) return true;
+    return !!(
+      boundary.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING
+    );
+  },
   labelNodes: function (post) {
-    // Short text leaves in the post's own chrome: the section label that sits
-    // above the post, and the header. Deliberately stops before the caption -
-    // a caption that happens to say "sponsored" must not read as an ad label.
-    const header = post.querySelector("header");
+    // Short text leaves in the post's chrome. Deliberately stops before the
+    // caption - a caption that happens to say "sponsored" must not read as an
+    // ad label.
+    const boundary = this.postChrome(post);
     const labels = [];
     const walker = document.createTreeWalker(post, NodeFilter.SHOW_TEXT);
-    let seen = 0;
-    let past = 0;
     let node;
     while ((node = walker.nextNode())) {
-      if (header) {
-        const pos = header.compareDocumentPosition(node);
-        const inside = !!(pos & Node.DOCUMENT_POSITION_CONTAINED_BY);
-        const before = !!(pos & Node.DOCUMENT_POSITION_PRECEDING);
-        // A short run past the header in case Instagram moves the label below
-        // it; still well short of the caption.
-        if (!inside && !before && ++past > this.HEADER_LOOKAHEAD) break;
-      } else if (++seen > this.HEADERLESS_SCAN) {
-        break;
-      }
+      if (!this.inChrome(boundary, node)) break;
+      if (!boundary && labels.length >= this.UNBOUNDED_SCAN) break;
       const text = this.norm(node.nodeValue).toLowerCase();
       if (text && text.length <= 40) labels.push(text);
     }
     return labels;
+  },
+  followButton: function (post) {
+    // A follow control in the post's own chrome is the plainest statement
+    // Instagram makes that this is not somebody you follow - and it says it
+    // in whatever language the interface is in, so there is no word list to
+    // keep up to date. Icon-only controls ("More options") and the counters
+    // in the action bar are excluded by the svg and boundary checks.
+    const boundary = this.postChrome(post);
+    const controls = post.querySelectorAll('[role="button"], button');
+    for (const control of controls) {
+      if (!this.inChrome(boundary, control)) break;
+      if (control.querySelector("svg")) continue;
+      const text = this.norm(control.textContent);
+      if (text && text.length <= this.MAX_BUTTON_TEXT) return control;
+    }
+    return null;
   },
   author: function (post) {
     const links = post.querySelectorAll('a[href^="/"]');
@@ -547,7 +579,7 @@ const IGFeed = {
     }
     return null;
   },
-  classify: function (post) {
+  classify: function (post, pastDivider) {
     const cached = post.dataset.ftIgClass;
     if (cached === "ad" || cached === "suggested" || cached === "keep") {
       return cached;
@@ -571,7 +603,9 @@ const IGFeed = {
     if (
       labels.some((text) =>
         this.SUGGESTED_LABELS.some((label) => text.includes(label)),
-      )
+      ) ||
+      this.followButton(post) ||
+      pastDivider
     ) {
       post.dataset.ftIgClass = "suggested";
       return "suggested";
@@ -647,7 +681,7 @@ const IGFeed = {
     label.className = "ft-ig-stub-label";
     if (caughtUp) {
       label.textContent =
-        "You're caught up. The rest of the feed is suggestions.";
+        "Everything below this point is suggestions.";
     } else {
       const author = this.author(post);
       const what = kind === "ad" ? "Ad" : "Suggested post";
