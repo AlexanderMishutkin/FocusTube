@@ -269,6 +269,7 @@ const PLATFORM_SETTINGS = {
   ig: [
     { key: "hide_ig_stories", label: "Hide Stories" },
     { key: "hide_ig_reels_nav", label: "Hide Reels Button" },
+    { key: "hide_ig_suggested", label: "Hide posts you don't follow" },
   ],
   fb: [
     { key: "hide_fb_stories", label: "Hide Stories" },
@@ -279,8 +280,9 @@ const PLATFORM_SETTINGS = {
     },
   ],
   li: [
-    { key: "hide_li_feed", label: "Hide Feed" },
-    { key: "hide_li_addfeed", label: 'Hide "Add to Your Feed"' },
+    { key: "hide_li_feed", label: "Cover the whole feed" },
+    { key: "hide_li_addfeed", label: "Hide follow suggestions" },
+    { key: "hide_li_suggested", label: "Hide posts outside your network" },
   ],
   tt: [],
 };
