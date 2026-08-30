@@ -295,16 +295,23 @@ body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed > *:not(.ft-ig-
   display: none !important;
 }
 body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed {
-  min-height: 0 !important;
-  height: auto !important;
+  /* The inline min-height set at collapse time holds the post's original
+     height, so the page never shortens under Instagram's infinite scroll.
+     The stub is centred in the space the post used to occupy. */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
 }
 .ft-ig-stub {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  margin: 0 0 12px;
+  margin: 0;
   min-height: 44px;
+  width: 100%;
+  max-width: 420px;
   box-sizing: border-box;
   border: 1px solid rgba(79, 172, 254, 0.35);
   border-radius: 10px;

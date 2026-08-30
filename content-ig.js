@@ -354,12 +354,16 @@ const IGFeed = {
   COLLAPSED_CLASS: "ft-ig-collapsed",
   STUB_CLASS: "ft-ig-stub",
   CAUGHT_UP_CLASS: "ft-ig-caught-up",
-  // Stop filtering after this many filtered posts in a row: past that point
-  // collapsing only shortens the page and eggs on the infinite scroller.
-  MAX_CONSECUTIVE: 10,
-  MAX_COLLAPSE_PER_TICK: 12,
+  // A collapsed post keeps the height it had, so the page never gets shorter
+  // and Instagram's infinite scroll is not goaded into loading more. This is
+  // the whole defence against runaway pagination.
+  MIN_COLLAPSED_HEIGHT: 400,
+  // Cumulative and never decremented, so unmounting a collapsed post cannot
+  // hand back budget and restart the cycle.
+  MAX_COLLAPSE_TOTAL: 20,
+  MAX_COLLAPSE_PER_TICK: 8,
   MAX_STUB_REPAIRS: 3,
-  TICK_INTERVAL_MS: 250,
+  TICK_INTERVAL_MS: 100,
   UNBOUNDED_SCAN: 20,
   MAX_BUTTON_TEXT: 24,
   ZERO_WIDTH: /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u00AD]/g,
@@ -383,6 +387,7 @@ const IGFeed = {
   lastPath: null,
   active: false,
   bypass: false,
+  collapsedTotal: 0,
 
   norm: function (text) {
     return (text || "").replace(this.ZERO_WIDTH, "").replace(/\s+/g, " ").trim();
@@ -440,7 +445,19 @@ const IGFeed = {
       // Reused for the life of the page so repeated enable/disable cycles do
       // not pile up entries in Utils.observers.
       this.observer = Utils.trackObserver(
-        new MutationObserver(() => this.schedule()),
+        new MutationObserver((records) => {
+          for (const record of records) {
+            if (!record.addedNodes.length) continue;
+            const target = record.target;
+            const post =
+              target && target.nodeType === 1 ? target.closest("article") : null;
+            // Video buffering, like counts, caption expansion - churn inside a
+            // post we have already judged tells us nothing new.
+            if (post && post.dataset.ftIgClass) continue;
+            this.schedule();
+            return;
+          }
+        }),
       );
     }
     if (this.root !== root) {
@@ -480,9 +497,8 @@ const IGFeed = {
     // own markup says. Only honoured after a real post has gone by, so a
     // stray heading above the feed can never blank the whole thing.
     const nodes = this.root.querySelectorAll("article, h3");
-    let streak = 0;
     let collapsedThisTick = 0;
-    let caughtUpAt = null;
+    let lastCollapsed = null;
     let pastDivider = false;
     let seenPost = false;
 
@@ -494,35 +510,33 @@ const IGFeed = {
       const post = node;
       seenPost = true;
       if (post.dataset.ftIgReveal === "1" || post.dataset.ftIgGiveUp === "1") {
-        streak = 0;
         if (this.collapsed.has(post)) this.restore(post);
         return;
       }
       const kind = this.classify(post, pastDivider);
-      // "pending" means the post has not painted its header yet - leave the
-      // streak alone and look again on the next tick.
+      // "pending" means the post has not painted its chrome yet. Look again
+      // next tick rather than judging it early.
       if (kind === "pending") return;
       if (kind === "keep") {
-        streak = 0;
-        if (this.collapsed.has(post)) this.restore(post);
-        return;
-      }
-      if (streak >= this.MAX_CONSECUTIVE) {
         if (this.collapsed.has(post)) this.restore(post);
         return;
       }
       if (this.collapsed.has(post)) {
         this.repairStub(post, kind);
-      } else {
-        if (collapsedThisTick >= this.MAX_COLLAPSE_PER_TICK) return;
-        this.collapse(post, kind);
-        collapsedThisTick += 1;
+        lastCollapsed = post;
+        return;
       }
-      streak += 1;
-      if (streak === this.MAX_CONSECUTIVE && !caughtUpAt) caughtUpAt = post;
+      if (this.collapsedTotal >= this.MAX_COLLAPSE_TOTAL) return;
+      if (collapsedThisTick >= this.MAX_COLLAPSE_PER_TICK) return;
+      this.collapse(post, kind);
+      this.collapsedTotal += 1;
+      collapsedThisTick += 1;
+      lastCollapsed = post;
     });
 
-    this.markCaughtUp(caughtUpAt);
+    this.markCaughtUp(
+      this.collapsedTotal >= this.MAX_COLLAPSE_TOTAL ? lastCollapsed : null,
+    );
   },
   postChrome: function (post) {
     // Feed posts carry no <header>. The like/comment/share <section> is the
@@ -618,14 +632,24 @@ const IGFeed = {
     }
     return "pending";
   },
+  measureHeight: function (post) {
+    // Measured before collapsing, while the post is still laid out. The floor
+    // covers a post whose media has not loaded yet and would otherwise pin
+    // the page at a height it never really had.
+    const height = Math.round(post.getBoundingClientRect().height);
+    return Math.max(height, this.MIN_COLLAPSED_HEIGHT);
+  },
   collapse: function (post, kind) {
+    const height = this.measureHeight(post);
     post.classList.add(this.COLLAPSED_CLASS);
+    Utils.setInlineStyle(post, "min-height", height + "px", "important");
     this.collapsed.add(post);
     this.renderStub(post, kind);
   },
   restore: function (post) {
     if (!post) return;
     post.classList.remove(this.COLLAPSED_CLASS, this.CAUGHT_UP_CLASS);
+    Utils.restoreInlineStyle(post, "min-height");
     post
       .querySelectorAll(":scope > ." + this.STUB_CLASS)
       .forEach((el) => el.remove());
@@ -636,6 +660,7 @@ const IGFeed = {
     [...this.collapsed].forEach((post) => this.restore(post));
     this.collapsed.clear();
     this.caughtUpPost = null;
+    this.collapsedTotal = 0;
     document
       .querySelectorAll("." + this.COLLAPSED_CLASS)
       .forEach((post) => this.restore(post));
@@ -681,7 +706,7 @@ const IGFeed = {
     label.className = "ft-ig-stub-label";
     if (caughtUp) {
       label.textContent =
-        "Everything below this point is suggestions.";
+        "Stopped hiding here. Everything below is suggestions.";
     } else {
       const author = this.author(post);
       const what = kind === "ad" ? "Ad" : "Suggested post";
