@@ -366,14 +366,6 @@ body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed {
   opacity: 0.85;
 }
 
-/* Everything below the "You're all caught up" card - posts, and Instagram's
-   load-more sentinel with them. Driven by an attribute rather than an inline
-   style, because Instagram blanks the style attribute on its own nodes when
-   it re-renders them. Attributes survive. */
-body.ft-hide-ig-suggested.ft-platform-ig [data-ft-ig-cut="1"] {
-  display: none !important;
-}
-
 /* LinkedIn: posts from outside your network, and promoted posts. Same shape
    as the Instagram blocks - the collapse is gated on the body class so
    turning the setting off reveals everything before any script runs, and the
