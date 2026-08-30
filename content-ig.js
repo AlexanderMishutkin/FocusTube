@@ -353,14 +353,10 @@ const Instagram = {
 const IGFeed = {
   COLLAPSED_CLASS: "ft-ig-collapsed",
   STUB_CLASS: "ft-ig-stub",
-  CAUGHT_UP_CLASS: "ft-ig-caught-up",
   // A collapsed post keeps the height it had, so the page never gets shorter
   // and Instagram's infinite scroll is not goaded into loading more. This is
   // the whole defence against runaway pagination.
   MIN_COLLAPSED_HEIGHT: 400,
-  // Cumulative and never decremented, so unmounting a collapsed post cannot
-  // hand back budget and restart the cycle.
-  MAX_COLLAPSE_TOTAL: 20,
   MAX_COLLAPSE_PER_TICK: 8,
   MAX_STUB_REPAIRS: 3,
   TICK_INTERVAL_MS: 100,
@@ -380,14 +376,12 @@ const IGFeed = {
   observer: null,
   root: null,
   collapsed: new Set(),
-  caughtUpPost: null,
+  lastRevealAllowed: null,
   scheduled: false,
   trailingTimer: null,
   lastTick: 0,
   lastPath: null,
   active: false,
-  bypass: false,
-  collapsedTotal: 0,
 
   norm: function (text) {
     return (text || "").replace(this.ZERO_WIDTH, "").replace(/\s+/g, " ").trim();
@@ -395,10 +389,15 @@ const IGFeed = {
   isFeedPath: function (path) {
     return path === "/" || path === "";
   },
+  revealAllowed: function () {
+    // Strict means strict: no way to peek at a hidden post. A running work
+    // timer forces strict everywhere else in the extension, so it does here.
+    if (FocusState.isWork) return false;
+    return CONFIG.platformSettings.ig !== "strict";
+  },
   shouldRun: function () {
     return (
       Utils.isExtensionEnabled() &&
-      !this.bypass &&
       this.isFeedPath(window.location.pathname) &&
       FocusState.shouldBlock &&
       CONFIG.visualHiding.igSuggested &&
@@ -407,10 +406,7 @@ const IGFeed = {
   },
   sync: function () {
     const path = window.location.pathname;
-    if (path !== this.lastPath) {
-      this.lastPath = path;
-      this.bypass = false;
-    }
+    if (path !== this.lastPath) this.lastPath = path;
     if (this.shouldRun()) this.enable();
     else this.disable();
   },
@@ -491,6 +487,16 @@ const IGFeed = {
     if (!this.root) return;
     Utils.pruneDetachedElements(this.collapsed);
 
+    // Switching between strict and warn changes whether the stubs offer a way
+    // through, so redraw the ones already on screen.
+    const revealAllowed = this.revealAllowed();
+    if (revealAllowed !== this.lastRevealAllowed) {
+      this.lastRevealAllowed = revealAllowed;
+      this.collapsed.forEach((post) =>
+        this.renderStub(post, post.dataset.ftIgClass),
+      );
+    }
+
     // Articles and section headings together, in document order. Instagram
     // ends the followed part of the feed with a divider carrying an <h3>
     // ("Suggested Posts"); every post below it is a suggestion, whatever its
@@ -498,7 +504,6 @@ const IGFeed = {
     // stray heading above the feed can never blank the whole thing.
     const nodes = this.root.querySelectorAll("article, h3");
     let collapsedThisTick = 0;
-    let lastCollapsed = null;
     let pastDivider = false;
     let seenPost = false;
 
@@ -509,9 +514,17 @@ const IGFeed = {
       }
       const post = node;
       seenPost = true;
-      if (post.dataset.ftIgReveal === "1" || post.dataset.ftIgGiveUp === "1") {
+      if (post.dataset.ftIgGiveUp === "1") {
         if (this.collapsed.has(post)) this.restore(post);
         return;
+      }
+      if (post.dataset.ftIgReveal === "1") {
+        if (revealAllowed) {
+          if (this.collapsed.has(post)) this.restore(post);
+          return;
+        }
+        // Dropping into strict mode retracts anything revealed under warn.
+        delete post.dataset.ftIgReveal;
       }
       const kind = this.classify(post, pastDivider);
       // "pending" means the post has not painted its chrome yet. Look again
@@ -523,20 +536,12 @@ const IGFeed = {
       }
       if (this.collapsed.has(post)) {
         this.repairStub(post, kind);
-        lastCollapsed = post;
         return;
       }
-      if (this.collapsedTotal >= this.MAX_COLLAPSE_TOTAL) return;
       if (collapsedThisTick >= this.MAX_COLLAPSE_PER_TICK) return;
       this.collapse(post, kind);
-      this.collapsedTotal += 1;
       collapsedThisTick += 1;
-      lastCollapsed = post;
     });
-
-    this.markCaughtUp(
-      this.collapsedTotal >= this.MAX_COLLAPSE_TOTAL ? lastCollapsed : null,
-    );
   },
   postChrome: function (post) {
     // Feed posts carry no <header>. The like/comment/share <section> is the
@@ -648,19 +653,17 @@ const IGFeed = {
   },
   restore: function (post) {
     if (!post) return;
-    post.classList.remove(this.COLLAPSED_CLASS, this.CAUGHT_UP_CLASS);
+    post.classList.remove(this.COLLAPSED_CLASS);
     Utils.restoreInlineStyle(post, "min-height");
     post
       .querySelectorAll(":scope > ." + this.STUB_CLASS)
       .forEach((el) => el.remove());
     this.collapsed.delete(post);
-    if (this.caughtUpPost === post) this.caughtUpPost = null;
   },
   restoreAll: function () {
     [...this.collapsed].forEach((post) => this.restore(post));
     this.collapsed.clear();
-    this.caughtUpPost = null;
-    this.collapsedTotal = 0;
+    this.lastRevealAllowed = null;
     document
       .querySelectorAll("." + this.COLLAPSED_CLASS)
       .forEach((post) => this.restore(post));
@@ -693,8 +696,7 @@ const IGFeed = {
     }
     while (stub.firstChild) stub.removeChild(stub.firstChild);
 
-    const caughtUp = this.caughtUpPost === post;
-    const iconUrl = Utils.getExtensionUrl("icons/icon48.png");
+    const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
     if (iconUrl) {
       const icon = document.createElement("img");
       icon.src = iconUrl;
@@ -702,49 +704,33 @@ const IGFeed = {
       icon.className = "ft-ig-stub-icon";
       stub.appendChild(icon);
     }
-    const label = document.createElement("span");
-    label.className = "ft-ig-stub-label";
-    if (caughtUp) {
-      label.textContent =
-        "Stopped hiding here. Everything below is suggestions.";
-    } else {
-      const author = this.author(post);
-      const what = kind === "ad" ? "Ad" : "Suggested post";
-      label.textContent = author
-        ? `${what} from @${author} hidden`
-        : `${what} hidden`;
-    }
-    stub.appendChild(label);
 
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "ft-ig-stub-btn";
-    button.textContent = caughtUp ? "Show the rest" : "Show";
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (caughtUp) {
-        this.bypass = true;
-        this.disable();
-      } else {
+    const title = document.createElement("h3");
+    title.textContent = kind === "ad" ? "Sponsored post" : "Suggested post";
+    stub.appendChild(title);
+
+    const subtitle = document.createElement("p");
+    const author = this.author(post);
+    subtitle.textContent =
+      kind === "ad"
+        ? "We're keeping you productive."
+        : author
+          ? "@" + author + " is not someone you follow."
+          : "Not from someone you follow.";
+    stub.appendChild(subtitle);
+
+    if (this.revealAllowed()) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ft-ig-stub-btn";
+      button.textContent = "View Anyway";
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         post.dataset.ftIgReveal = "1";
         this.restore(post);
-      }
-    });
-    stub.appendChild(button);
-  },
-  markCaughtUp: function (post) {
-    const next = post && this.collapsed.has(post) ? post : null;
-    if (this.caughtUpPost === next) return;
-    const previous = this.caughtUpPost;
-    this.caughtUpPost = next;
-    if (previous && previous.isConnected && this.collapsed.has(previous)) {
-      previous.classList.remove(this.CAUGHT_UP_CLASS);
-      this.renderStub(previous, previous.dataset.ftIgClass);
-    }
-    if (next) {
-      next.classList.add(this.CAUGHT_UP_CLASS);
-      this.renderStub(next, next.dataset.ftIgClass);
+      });
+      stub.appendChild(button);
     }
   },
 };
