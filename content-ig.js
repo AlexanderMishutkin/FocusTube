@@ -590,9 +590,15 @@ const IGFeed = {
     if (endAt && !this.endBypass) this.endFeed(endAt);
     else this.clearEnd();
 
-    Utils.debugLog("ig-feed", {
+    // Written to the body every pass, so the state can be read from the page
+    // console with `document.body.dataset.ftIgFeed` - no extension APIs, no
+    // debug flag. Attribute writes do not feed back into our own observer,
+    // which watches childList only.
+    const clipped =
+      this.truncatedList || (firstPost ? this.feedList(firstPost) : null);
+    const state = {
       root: this.root ? this.root.tagName.toLowerCase() : null,
-      posts: nodes.length,
+      posts: this.root.querySelectorAll("article").length,
       hidden: this.collapsed.size,
       run,
       pastDivider,
@@ -600,11 +606,21 @@ const IGFeed = {
       ended: !!this.endedAt,
       tailHidden: this.truncatedTail.size,
       clippedTo: this.truncatedHeight,
-      clippedEl: this.truncatedList ? this.truncatedList.tagName.toLowerCase() : null,
+      list: clipped
+        ? clipped.tagName.toLowerCase() +
+          "." +
+          String(clipped.className || "").split(/\s+/).slice(0, 2).join(".") +
+          " children=" +
+          clipped.children.length +
+          " h=" +
+          Math.round(clipped.getBoundingClientRect().height)
+        : null,
       docHeight: document.scrollingElement
         ? document.scrollingElement.scrollHeight
         : 0,
-    });
+    };
+    if (document.body) document.body.dataset.ftIgFeed = JSON.stringify(state);
+    Utils.debugLog("ig-feed", state);
   },
   postChrome: function (post) {
     // Feed posts carry no <header>. The like/comment/share <section> is the
