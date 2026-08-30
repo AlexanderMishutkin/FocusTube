@@ -520,6 +520,8 @@ const IGFeed = {
     // own markup says. Only honoured after a real post has gone by, so a
     // stray heading above the feed can never blank the whole thing.
     const nodes = this.root.querySelectorAll("article, h3");
+    const firstPost = this.root.querySelector("article");
+    const list = firstPost ? this.feedList(firstPost) : null;
     let collapsedThisTick = 0;
     let pastDivider = false;
     let seenPost = false;
@@ -529,7 +531,17 @@ const IGFeed = {
 
     nodes.forEach((node) => {
       if (node.tagName === "H3") {
-        if (seenPost && !node.closest("article")) pastDivider = true;
+        // A heading in the feed list itself is Instagram's "Suggested Posts"
+        // divider. Requiring a post above it was wrong: when nothing new is
+        // left from people you follow, the divider comes first. Headings
+        // outside the list - a stories rail, a sidebar - still cannot blank
+        // the feed.
+        if (
+          !node.closest("article") &&
+          (seenPost || (list && list.contains(node)))
+        ) {
+          pastDivider = true;
+        }
         return;
       }
       const post = node;
@@ -651,9 +663,11 @@ const IGFeed = {
   },
   classify: function (post, pastDivider) {
     const cached = post.dataset.ftIgClass;
-    if (cached === "ad" || cached === "suggested" || cached === "keep") {
-      return cached;
-    }
+    if (cached === "ad" || cached === "suggested") return cached;
+    // A cached "keep" is only good while the post is still above the divider.
+    // Instagram renders the divider after the posts below it have already been
+    // judged, so the stamp has to be reconsidered once it turns up.
+    if (cached === "keep" && !pastDivider) return "keep";
     const labels = this.labelNodes(post);
     const hasTime = !!post.querySelector("time[datetime]");
     if (
