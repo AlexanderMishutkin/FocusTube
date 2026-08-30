@@ -370,6 +370,11 @@ const IGFeed = {
     "suggested posts",
     "recommended for you",
   ],
+  // Instagram's "You're all caught up" card, which it puts between the last
+  // post from someone you follow and the suggestions below. The illustration
+  // is a fixed asset path - not a hashed class, not a heading that could be
+  // anything else, and identical in every interface language.
+  DIVIDER_MARK: 'img[src*="illo-confirm-refresh"]',
   NON_PROFILE_PATH:
     /^\/(explore|reel|reels|direct|stories|accounts|p|about|legal|privacy)(\/|$)/,
 
@@ -504,31 +509,18 @@ const IGFeed = {
     // ("Suggested Posts"); every post below it is a suggestion, whatever its
     // own markup says. Only honoured after a real post has gone by, so a
     // stray heading above the feed can never blank the whole thing.
-    const nodes = this.root.querySelectorAll("article, h3");
-    const firstPost = this.root.querySelector("article");
-    const list = firstPost ? this.feedList(firstPost) : null;
+    // Posts and the caught-up card together, in document order.
+    const nodes = this.root.querySelectorAll("article, " + this.DIVIDER_MARK);
     let collapsedThisTick = 0;
     let pastDivider = false;
-    let seenPost = false;
     let run = 0;
 
     nodes.forEach((node) => {
-      if (node.tagName === "H3") {
-        // A heading in the feed list itself is Instagram's "Suggested Posts"
-        // divider. Requiring a post above it was wrong: when nothing new is
-        // left from people you follow, the divider comes first. Headings
-        // outside the list - a stories rail, a sidebar - still cannot blank
-        // the feed.
-        if (
-          !node.closest("article") &&
-          (seenPost || (list && list.contains(node)))
-        ) {
-          pastDivider = true;
-        }
+      if (node.tagName === "IMG") {
+        pastDivider = true;
         return;
       }
       const post = node;
-      seenPost = true;
       if (post.dataset.ftIgGiveUp === "1") {
         run = 0;
         if (this.collapsed.has(post)) this.restore(post);
@@ -572,6 +564,9 @@ const IGFeed = {
       hidden: this.collapsed.size,
       run,
       pastDivider,
+      // 0 means the caught-up card is not under the feed root, and nothing
+      // downstream of it can work.
+      dividerMarks: this.root.querySelectorAll(this.DIVIDER_MARK).length,
       stubsSized: this.root.querySelectorAll(".ft-ig-stub[style]").length,
       docHeight: document.scrollingElement
         ? document.scrollingElement.scrollHeight
