@@ -829,14 +829,44 @@ const IGFeed = {
     if (height > 0) stub.style.setProperty("height", height + "px", "important");
     while (stub.firstChild) stub.removeChild(stub.firstChild);
 
-    const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
-    if (iconUrl) {
-      const icon = document.createElement("img");
-      icon.src = iconUrl;
-      icon.alt = "";
-      icon.className = "ft-ig-stub-icon";
-      stub.appendChild(icon);
-    }
+    // Drawn inline rather than loaded from the extension. An <img> pointing at
+    // chrome-extension:// fails as "chrome-extension://invalid/" whenever the
+    // extension context is replaced - on every reload of an unpacked build -
+    // and the page retries it, which is where the endless GET errors came
+    // from. This asks the network for nothing.
+    const NS = "http://www.w3.org/2000/svg";
+    const icon = document.createElementNS(NS, "svg");
+    icon.setAttribute("viewBox", "0 0 64 64");
+    icon.setAttribute("width", "64");
+    icon.setAttribute("height", "64");
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("class", "ft-ig-stub-icon");
+    const plate = document.createElementNS(NS, "rect");
+    plate.setAttribute("x", "2");
+    plate.setAttribute("y", "2");
+    plate.setAttribute("width", "60");
+    plate.setAttribute("height", "60");
+    plate.setAttribute("rx", "16");
+    plate.setAttribute("fill", "#4facfe");
+    const ring = document.createElementNS(NS, "circle");
+    ring.setAttribute("cx", "32");
+    ring.setAttribute("cy", "32");
+    ring.setAttribute("r", "15");
+    ring.setAttribute("fill", "none");
+    ring.setAttribute("stroke", "#fff");
+    ring.setAttribute("stroke-width", "4");
+    const slash = document.createElementNS(NS, "line");
+    slash.setAttribute("x1", "21");
+    slash.setAttribute("y1", "21");
+    slash.setAttribute("x2", "43");
+    slash.setAttribute("y2", "43");
+    slash.setAttribute("stroke", "#fff");
+    slash.setAttribute("stroke-width", "4");
+    slash.setAttribute("stroke-linecap", "round");
+    icon.appendChild(plate);
+    icon.appendChild(ring);
+    icon.appendChild(slash);
+    stub.appendChild(icon);
 
     const isEnd = post.dataset.ftIgEnd === "1";
     const title = document.createElement("h3");

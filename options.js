@@ -655,8 +655,8 @@ const platforms = {
       },
       {
         id: "hide_ig_suggested",
-        label: "Hide Suggested Posts",
-        desc: "Collapse feed posts from accounts you do not follow",
+        label: "Hide posts you don't follow",
+        desc: "Replaces suggested and sponsored posts in the feed with a placeholder, and ends the feed once Instagram runs out of people you follow",
       },
     ],
   },
@@ -686,18 +686,18 @@ const platforms = {
     settings: [
       {
         id: "hide_li_feed",
-        label: "Hide Feed",
-        desc: "Hide the main feed section",
+        label: "Cover the whole feed",
+        desc: "Puts one panel over the entire feed. Independent of the setting below - this hides everything, that hides only what is not from your network",
       },
       {
         id: "hide_li_addfeed",
-        label: "Hide Add to Feed",
-        desc: "Hide suggested follows",
+        label: "Hide follow suggestions",
+        desc: 'Hides the "Add to your feed" box in the sidebar',
       },
       {
         id: "hide_li_suggested",
-        label: "Hide Posts Outside Your Network",
-        desc: "Collapse feed posts from people you do not follow, and promoted posts",
+        label: "Hide posts outside your network",
+        desc: "Replaces posts from people you are not connected to, and promoted posts, with a placeholder. Leaves the rest of the feed alone",
       },
     ],
   },

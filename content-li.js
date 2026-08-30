@@ -445,7 +445,14 @@ const LinkedIn = {
 const LIFeed = {
   COLLAPSED_CLASS: "ft-li-collapsed",
   STUB_CLASS: "ft-li-stub",
-  FOLLOW_ICON: 'svg[id="add-small"]',
+  // The plus icon on "Follow" and the person-plus icon on "Connect". Both say
+  // the same thing: this is not somebody you are already connected to. Found
+  // by icon rather than by label, so the interface language does not matter.
+  CONNECT_ICONS: ["add-small", "connect-small"],
+  // Marks the start of the post body. Everything above it is the header,
+  // which is the only place a "Promoted" label is trustworthy - the caption
+  // is not.
+  BODY_MARK: '[data-testid="expandable-text-box"]',
   MIN_COLLAPSED_HEIGHT: 260,
   MAX_COLLAPSE_PER_TICK: 8,
   MAX_STUB_REPAIRS: 3,
@@ -605,32 +612,41 @@ const LIFeed = {
     });
   },
   followButton: function (post) {
-    const buttons = post.querySelectorAll("button");
-    for (const button of buttons) {
-      if (button.querySelector(this.FOLLOW_ICON)) return button;
+    const selector = this.CONNECT_ICONS.map(
+      (id) => 'svg[id="' + id + '"]',
+    ).join(", ");
+    // A link, not only a button: "Connect" is rendered as an anchor.
+    const controls = post.querySelectorAll("button, a");
+    for (const control of controls) {
+      if (control.querySelector(selector)) return control;
     }
     return null;
   },
-  outboundCta: function (post) {
-    // Promoted posts link straight out; organic external links are wrapped in
-    // linkedin.com/safety/go/ first.
-    const links = post.querySelectorAll('a[href^="http"]');
-    for (const link of links) {
-      const href = link.getAttribute("href") || "";
-      if (!/^https?:\/\//i.test(href)) continue;
-      const host = href
-        .replace(/^https?:\/\//i, "")
-        .split(/[/?#]/)[0]
-        .toLowerCase();
-      if (host === "linkedin.com" || host.endsWith(".linkedin.com")) continue;
-      if (host.endsWith("licdn.com")) continue;
-      return link;
+  headerLabels: function (post) {
+    // Short text leaves above the post body. Scoped that way so a caption
+    // that happens to say "promoted" is not read as an ad label.
+    const body = post.querySelector(this.BODY_MARK);
+    const labels = [];
+    const walker = document.createTreeWalker(post, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (body) {
+        const pos = body.compareDocumentPosition(node);
+        const inside = !!(pos & Node.DOCUMENT_POSITION_CONTAINED_BY);
+        const before = !!(pos & Node.DOCUMENT_POSITION_PRECEDING);
+        if (inside || !before) break;
+      } else if (labels.length >= 20) {
+        break;
+      }
+      const text = this.norm(node.nodeValue).toLowerCase();
+      if (text && text.length <= 40) labels.push(text);
     }
-    return null;
+    return labels;
   },
   isRendered: function (post) {
     // The action bar is the last thing to paint, so its presence means the
-    // header - and any Follow control in it - has already been rendered.
+    // header - and any Follow or Connect control in it - has already been
+    // rendered.
     return (
       !!post.querySelector('a[href*="/in/"], a[href*="/company/"]') &&
       !!post.querySelector('svg[id="thumbs-up-outline-small"]')
@@ -645,7 +661,13 @@ const LIFeed = {
       'a[href*="/in/"] [aria-label], a[href*="/company/"] [aria-label]',
     );
     if (labelled) {
-      const label = this.norm(labelled.getAttribute("aria-label")).split(",")[0];
+      // e.g. "Kirill Sadchikov  2nd", "ST Engineering Verified",
+      // "Almaz Salyakhov, Open to work Verified Profile 2nd".
+      const label = this.norm(labelled.getAttribute("aria-label"))
+        .split(",")[0]
+        .replace(/\s*•?\s*(1st|2nd|3rd\+?)\s*$/i, "")
+        .replace(/\s+verified\s*$/i, "")
+        .trim();
       if (label) return label.slice(0, 60);
     }
     const links = post.querySelectorAll('a[href*="/in/"], a[href*="/company/"]');
@@ -661,9 +683,12 @@ const LIFeed = {
       return cached;
     }
     const rendered = this.isRendered(post);
-    const text = this.norm(post.textContent).toLowerCase();
-    const promoted = this.PROMOTED_LABELS.some((label) => text.includes(label));
-    if (this.outboundCta(post) && (promoted || !post.querySelector("time"))) {
+    const labels = this.headerLabels(post);
+    if (
+      labels.some((text) =>
+        this.PROMOTED_LABELS.some((label) => text.startsWith(label)),
+      )
+    ) {
       post.dataset.ftLiClass = "ad";
       return "ad";
     }
@@ -735,14 +760,44 @@ const LIFeed = {
       stub.style.setProperty("height", height + "px", "important");
     }
 
-    const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
-    if (iconUrl) {
-      const icon = document.createElement("img");
-      icon.src = iconUrl;
-      icon.alt = "";
-      icon.className = "ft-li-stub-icon";
-      stub.appendChild(icon);
-    }
+    // Drawn inline rather than loaded from the extension. An <img> pointing at
+    // chrome-extension:// fails as "chrome-extension://invalid/" whenever the
+    // extension context is replaced - on every reload of an unpacked build -
+    // and the page retries it, which is where the endless GET errors came
+    // from. This asks the network for nothing.
+    const NS = "http://www.w3.org/2000/svg";
+    const icon = document.createElementNS(NS, "svg");
+    icon.setAttribute("viewBox", "0 0 64 64");
+    icon.setAttribute("width", "64");
+    icon.setAttribute("height", "64");
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("class", "ft-li-stub-icon");
+    const plate = document.createElementNS(NS, "rect");
+    plate.setAttribute("x", "2");
+    plate.setAttribute("y", "2");
+    plate.setAttribute("width", "60");
+    plate.setAttribute("height", "60");
+    plate.setAttribute("rx", "16");
+    plate.setAttribute("fill", "#4facfe");
+    const ring = document.createElementNS(NS, "circle");
+    ring.setAttribute("cx", "32");
+    ring.setAttribute("cy", "32");
+    ring.setAttribute("r", "15");
+    ring.setAttribute("fill", "none");
+    ring.setAttribute("stroke", "#fff");
+    ring.setAttribute("stroke-width", "4");
+    const slash = document.createElementNS(NS, "line");
+    slash.setAttribute("x1", "21");
+    slash.setAttribute("y1", "21");
+    slash.setAttribute("x2", "43");
+    slash.setAttribute("y2", "43");
+    slash.setAttribute("stroke", "#fff");
+    slash.setAttribute("stroke-width", "4");
+    slash.setAttribute("stroke-linecap", "round");
+    icon.appendChild(plate);
+    icon.appendChild(ring);
+    icon.appendChild(slash);
+    stub.appendChild(icon);
     const title = document.createElement("h3");
     title.textContent = kind === "ad" ? "Promoted post" : "Not in your network";
     stub.appendChild(title);
