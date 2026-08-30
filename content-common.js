@@ -103,6 +103,44 @@ const Utils = {
       return false;
     }
   },
+  // The extension's mark, drawn inline. Nothing here loads an image from
+  // chrome-extension://, because chrome.runtime.getURL() returns
+  // "chrome-extension://invalid/" once the extension context has been replaced
+  // - which happens on every reload of an unpacked build while pages are open
+  // - and the page then retries that URL for as long as it stays open.
+  createBadge: function (className) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 64 64");
+    svg.setAttribute("aria-hidden", "true");
+    if (className) svg.setAttribute("class", className);
+    const plate = document.createElementNS(NS, "rect");
+    plate.setAttribute("x", "2");
+    plate.setAttribute("y", "2");
+    plate.setAttribute("width", "60");
+    plate.setAttribute("height", "60");
+    plate.setAttribute("rx", "16");
+    plate.setAttribute("fill", "#4facfe");
+    const ring = document.createElementNS(NS, "circle");
+    ring.setAttribute("cx", "32");
+    ring.setAttribute("cy", "32");
+    ring.setAttribute("r", "15");
+    ring.setAttribute("fill", "none");
+    ring.setAttribute("stroke", "#fff");
+    ring.setAttribute("stroke-width", "4");
+    const slash = document.createElementNS(NS, "line");
+    slash.setAttribute("x1", "21");
+    slash.setAttribute("y1", "21");
+    slash.setAttribute("x2", "43");
+    slash.setAttribute("y2", "43");
+    slash.setAttribute("stroke", "#fff");
+    slash.setAttribute("stroke-width", "4");
+    slash.setAttribute("stroke-linecap", "round");
+    svg.appendChild(plate);
+    svg.appendChild(ring);
+    svg.appendChild(slash);
+    return svg;
+  },
   getExtensionUrl: function (path) {
     try {
       if (!chrome.runtime?.id || !chrome.runtime?.getURL) return "";
@@ -703,10 +741,7 @@ const UI = {
     const target = document.body || document.documentElement;
     const card = document.createElement("div");
     card.className = "focus-tube-card";
-    const img = document.createElement("img");
-    const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
-    if (iconUrl) img.src = iconUrl;
-    img.className = "focus-tube-icon-img";
+    const img = Utils.createBadge("focus-tube-icon-img");
     let headerText =
       type === "strict" ? "Strict Mode Active" : "Distraction Blocked";
     let bodyText = "FocusTube is keeping you productive.";
@@ -848,14 +883,9 @@ const UI = {
     const toast = document.createElement("div");
     toast.id = "ft-toast";
     toast.style.cssText = `position: fixed; top: 24px; right: 24px; background: #1f1f1f; color: #fff; padding: 16px 24px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 2147483647; font-family: sans-serif; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 15px; opacity: 0; transform: translateY(-20px); transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); min-width: 300px;`;
-    const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
-    if (iconUrl) {
-      const icon = document.createElement("img");
-      icon.src = iconUrl;
-      icon.alt = "";
-      icon.style.cssText = "width:32px;height:32px;border-radius:8px;";
-      toast.appendChild(icon);
-    }
+    const icon = Utils.createBadge();
+    icon.style.cssText = "width:32px;height:32px;flex:0 0 auto;";
+    toast.appendChild(icon);
     const textWrap = document.createElement("div");
     const titleEl = document.createElement("div");
     titleEl.textContent = title;
@@ -890,14 +920,9 @@ const UI = {
             box-shadow: 0 10px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1); 
             opacity: 0; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         `;
-    const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
-    if (iconUrl) {
-      const icon = document.createElement("img");
-      icon.src = iconUrl;
-      icon.alt = "";
-      icon.style.cssText = "width:24px;height:24px;border-radius:6px;";
-      n.appendChild(icon);
-    }
+    const icon = Utils.createBadge();
+    icon.style.cssText = "width:24px;height:24px;flex:0 0 auto;";
+    n.appendChild(icon);
     const message = document.createElement("span");
     message.textContent = "Strict Mode prevented access.";
     n.appendChild(message);

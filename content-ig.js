@@ -276,8 +276,6 @@ const Instagram = {
     set.clear();
   },
   showStoriesOverlay: function () {
-    const iconUrl = Utils.getExtensionUrl("icons/icon48.png");
-    if (!iconUrl) return;
     if (document.getElementById(this.storiesOverlayId)) return;
     const storyTray = this.findStoriesTray();
     if (!storyTray) return;
@@ -286,9 +284,7 @@ const Instagram = {
     overlay.id = this.storiesOverlayId;
     overlay.className = "ft-stories-overlay";
     if (CONFIG.isDarkMode) overlay.classList.add("dark");
-    const icon = document.createElement("img");
-    icon.src = iconUrl;
-    icon.className = "ft-stories-overlay-icon";
+    const icon = Utils.createBadge("ft-stories-overlay-icon");
     const text = document.createElement("span");
     text.textContent = "Stories Hidden";
     overlay.appendChild(icon);
@@ -768,44 +764,7 @@ const IGFeed = {
     if (height > 0) stub.style.setProperty("height", height + "px", "important");
     while (stub.firstChild) stub.removeChild(stub.firstChild);
 
-    // Drawn inline rather than loaded from the extension. An <img> pointing at
-    // chrome-extension:// fails as "chrome-extension://invalid/" whenever the
-    // extension context is replaced - on every reload of an unpacked build -
-    // and the page retries it, which is where the endless GET errors came
-    // from. This asks the network for nothing.
-    const NS = "http://www.w3.org/2000/svg";
-    const icon = document.createElementNS(NS, "svg");
-    icon.setAttribute("viewBox", "0 0 64 64");
-    icon.setAttribute("width", "64");
-    icon.setAttribute("height", "64");
-    icon.setAttribute("aria-hidden", "true");
-    icon.setAttribute("class", "ft-ig-stub-icon");
-    const plate = document.createElementNS(NS, "rect");
-    plate.setAttribute("x", "2");
-    plate.setAttribute("y", "2");
-    plate.setAttribute("width", "60");
-    plate.setAttribute("height", "60");
-    plate.setAttribute("rx", "16");
-    plate.setAttribute("fill", "#4facfe");
-    const ring = document.createElementNS(NS, "circle");
-    ring.setAttribute("cx", "32");
-    ring.setAttribute("cy", "32");
-    ring.setAttribute("r", "15");
-    ring.setAttribute("fill", "none");
-    ring.setAttribute("stroke", "#fff");
-    ring.setAttribute("stroke-width", "4");
-    const slash = document.createElementNS(NS, "line");
-    slash.setAttribute("x1", "21");
-    slash.setAttribute("y1", "21");
-    slash.setAttribute("x2", "43");
-    slash.setAttribute("y2", "43");
-    slash.setAttribute("stroke", "#fff");
-    slash.setAttribute("stroke-width", "4");
-    slash.setAttribute("stroke-linecap", "round");
-    icon.appendChild(plate);
-    icon.appendChild(ring);
-    icon.appendChild(slash);
-    stub.appendChild(icon);
+    stub.appendChild(Utils.createBadge("ft-ig-stub-icon"));
 
     const title = document.createElement("h3");
     title.textContent = kind === "ad" ? "Sponsored post" : "Suggested post";
