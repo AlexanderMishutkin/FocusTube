@@ -385,6 +385,8 @@ const IGFeed = {
   root: null,
   collapsed: new Set(),
   truncatedTail: new Set(),
+  truncatedList: null,
+  truncatedHeight: 0,
   endedAt: null,
   endBypass: false,
   lastRevealAllowed: null,
@@ -585,6 +587,11 @@ const IGFeed = {
       belowDivider,
       ended: !!this.endedAt,
       tailHidden: this.truncatedTail.size,
+      clippedTo: this.truncatedHeight,
+      clippedEl: this.truncatedList ? this.truncatedList.tagName.toLowerCase() : null,
+      docHeight: document.scrollingElement
+        ? document.scrollingElement.scrollHeight
+        : 0,
     });
   },
   postChrome: function (post) {
@@ -689,11 +696,37 @@ const IGFeed = {
     }
     this.truncateAfter(post);
   },
+  feedList: function (post) {
+    // The lowest ancestor that holds more than one post: the list Instagram
+    // appends to.
+    let node = post.parentElement;
+    while (node && node !== this.root) {
+      if (node.querySelectorAll("article").length > 1) return node;
+      node = node.parentElement;
+    }
+    return this.root;
+  },
   truncateAfter: function (post) {
-    // Hide everything below this post, at every level between it and the feed
-    // root. Instagram's load-more sentinel is somewhere down there, and an
-    // IntersectionObserver never fires for a display:none element - so this
-    // stops the pagination requests, not just the posts they bring back.
+    // Clip the feed list to end just below this post. Setting display:none on
+    // each element below it is not enough on its own: they are React-managed
+    // and a re-render puts the style prop back. One max-height on the list
+    // survives that, stops the document growing, and - because an
+    // IntersectionObserver intersection rect is clipped by ancestor overflow -
+    // takes Instagram's load-more sentinel out of view with it. That stops the
+    // pagination requests, not just the posts they bring back.
+    const list = this.feedList(post);
+    if (list) {
+      const cut = Math.ceil(
+        post.getBoundingClientRect().bottom - list.getBoundingClientRect().top,
+      );
+      if (cut > 0) {
+        this.truncatedList = list;
+        this.truncatedHeight = cut;
+        Utils.setInlineStyle(list, "max-height", cut + "px", "important");
+        Utils.setInlineStyle(list, "overflow", "hidden", "important");
+      }
+    }
+    // Belt and braces, and it saves Instagram laying out what it cannot show.
     let node = post;
     while (node && node !== this.root && node.parentElement) {
       let sibling = node.nextElementSibling;
@@ -708,7 +741,13 @@ const IGFeed = {
     }
   },
   clearEnd: function () {
-    if (!this.endedAt && !this.truncatedTail.size) return;
+    if (!this.endedAt && !this.truncatedTail.size && !this.truncatedList) return;
+    if (this.truncatedList) {
+      Utils.restoreInlineStyle(this.truncatedList, "max-height");
+      Utils.restoreInlineStyle(this.truncatedList, "overflow");
+      this.truncatedList = null;
+      this.truncatedHeight = 0;
+    }
     this.truncatedTail.forEach((el) =>
       Utils.restoreInlineStyle(el, "display"),
     );
