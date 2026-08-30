@@ -358,14 +358,6 @@ const IGFeed = {
   // the whole defence against runaway pagination.
   MIN_COLLAPSED_HEIGHT: 400,
   MAX_COLLAPSE_PER_TICK: 8,
-  // After this many hidden posts in a row there is nothing left but
-  // suggestions, so the feed is ended rather than scrolled through.
-  END_FEED_AFTER: 8,
-  // Below Instagram's own "Suggested Posts" divider it has already said there
-  // is nothing left from people you follow, so end it sooner. This does not
-  // depend on an unbroken run surviving virtualisation, which the run counter
-  // does.
-  END_FEED_AFTER_DIVIDER: 3,
   MAX_STUB_REPAIRS: 3,
   TICK_INTERVAL_MS: 100,
   UNBOUNDED_SCAN: 20,
@@ -384,11 +376,6 @@ const IGFeed = {
   observer: null,
   root: null,
   collapsed: new Set(),
-  truncatedTail: new Set(),
-  truncatedList: null,
-  truncatedHeight: 0,
-  endedAt: null,
-  endBypass: false,
   lastRevealAllowed: null,
   scheduled: false,
   trailingTimer: null,
@@ -421,7 +408,6 @@ const IGFeed = {
     const path = window.location.pathname;
     if (path !== this.lastPath) {
       this.lastPath = path;
-      this.endBypass = false;
     }
     if (this.shouldRun()) this.enable();
     else this.disable();
@@ -502,7 +488,6 @@ const IGFeed = {
     this.ensureObserver();
     if (!this.root) return;
     Utils.pruneDetachedElements(this.collapsed);
-    Utils.pruneDetachedElements(this.truncatedTail);
 
     // Switching between strict and warn changes whether the stubs offer a way
     // through, so redraw the ones already on screen.
@@ -526,8 +511,6 @@ const IGFeed = {
     let pastDivider = false;
     let seenPost = false;
     let run = 0;
-    let belowDivider = 0;
-    let endAt = null;
 
     nodes.forEach((node) => {
       if (node.tagName === "H3") {
@@ -577,44 +560,19 @@ const IGFeed = {
         collapsedThisTick += 1;
       }
       run += 1;
-      if (pastDivider) belowDivider += 1;
-      if (
-        !endAt &&
-        (run >= this.END_FEED_AFTER ||
-          belowDivider >= this.END_FEED_AFTER_DIVIDER)
-      ) {
-        endAt = post;
-      }
     });
-
-    if (endAt && !this.endBypass) this.endFeed(endAt);
-    else this.clearEnd();
 
     // Written to the body every pass, so the state can be read from the page
     // console with `document.body.dataset.ftIgFeed` - no extension APIs, no
     // debug flag. Attribute writes do not feed back into our own observer,
     // which watches childList only.
-    const clipped =
-      this.truncatedList || (firstPost ? this.feedList(firstPost) : null);
     const state = {
       root: this.root ? this.root.tagName.toLowerCase() : null,
       posts: this.root.querySelectorAll("article").length,
       hidden: this.collapsed.size,
       run,
       pastDivider,
-      belowDivider,
-      ended: !!this.endedAt,
-      tailHidden: this.truncatedTail.size,
-      clippedTo: this.truncatedHeight,
-      list: clipped
-        ? clipped.tagName.toLowerCase() +
-          "." +
-          String(clipped.className || "").split(/\s+/).slice(0, 2).join(".") +
-          " children=" +
-          clipped.children.length +
-          " h=" +
-          Math.round(clipped.getBoundingClientRect().height)
-        : null,
+      stubsSized: this.root.querySelectorAll(".ft-ig-stub[style]").length,
       docHeight: document.scrollingElement
         ? document.scrollingElement.scrollHeight
         : 0,
@@ -718,75 +676,16 @@ const IGFeed = {
     }
     return "pending";
   },
-  endFeed: function (post) {
-    if (this.endedAt !== post) {
-      this.clearEnd();
-      this.endedAt = post;
-      this.renderStub(post, post.dataset.ftIgClass);
-    }
-    this.truncateAfter(post);
-  },
   feedList: function (post) {
-    // The lowest ancestor that holds more than one post: the list Instagram
-    // appends to.
+    // The lowest ancestor holding more than one post: the list Instagram
+    // appends to. Used to tell its "Suggested Posts" divider apart from a
+    // heading that belongs to something else on the page.
     let node = post.parentElement;
     while (node && node !== this.root) {
       if (node.querySelectorAll("article").length > 1) return node;
       node = node.parentElement;
     }
     return this.root;
-  },
-  truncateAfter: function (post) {
-    // Clip the feed list to end just below this post. Setting display:none on
-    // each element below it is not enough on its own: they are React-managed
-    // and a re-render puts the style prop back. One max-height on the list
-    // survives that, stops the document growing, and - because an
-    // IntersectionObserver intersection rect is clipped by ancestor overflow -
-    // takes Instagram's load-more sentinel out of view with it. That stops the
-    // pagination requests, not just the posts they bring back.
-    const list = this.feedList(post);
-    if (list) {
-      const cut = Math.ceil(
-        post.getBoundingClientRect().bottom - list.getBoundingClientRect().top,
-      );
-      if (cut > 0) {
-        this.truncatedList = list;
-        this.truncatedHeight = cut;
-        Utils.setInlineStyle(list, "max-height", cut + "px", "important");
-        Utils.setInlineStyle(list, "overflow", "hidden", "important");
-      }
-    }
-    // Belt and braces, and it saves Instagram laying out what it cannot show.
-    let node = post;
-    while (node && node !== this.root && node.parentElement) {
-      let sibling = node.nextElementSibling;
-      while (sibling) {
-        if (!this.truncatedTail.has(sibling)) {
-          Utils.setInlineStyle(sibling, "display", "none", "important");
-          this.truncatedTail.add(sibling);
-        }
-        sibling = sibling.nextElementSibling;
-      }
-      node = node.parentElement;
-    }
-  },
-  clearEnd: function () {
-    if (!this.endedAt && !this.truncatedTail.size && !this.truncatedList) return;
-    if (this.truncatedList) {
-      Utils.restoreInlineStyle(this.truncatedList, "max-height");
-      Utils.restoreInlineStyle(this.truncatedList, "overflow");
-      this.truncatedList = null;
-      this.truncatedHeight = 0;
-    }
-    this.truncatedTail.forEach((el) =>
-      Utils.restoreInlineStyle(el, "display"),
-    );
-    this.truncatedTail.clear();
-    const ended = this.endedAt;
-    this.endedAt = null;
-    if (ended && ended.isConnected && this.collapsed.has(ended)) {
-      this.renderStub(ended, ended.dataset.ftIgClass);
-    }
   },
   measureHeight: function (post) {
     // Measured before collapsing, while the post is still laid out. The floor
@@ -796,16 +695,20 @@ const IGFeed = {
     return Math.max(height, this.MIN_COLLAPSED_HEIGHT);
   },
   collapse: function (post, kind) {
-    const height = this.measureHeight(post);
+    // Measured before collapsing, then carried on a data attribute. It cannot
+    // live in an inline style on the post: Instagram re-renders these nodes
+    // and blanks their style attribute, which is what defeated every earlier
+    // attempt to hold the page height. Attributes and classes survive; the
+    // height is applied to our own stub, which Instagram does not manage.
+    post.dataset.ftIgHeight = String(this.measureHeight(post));
     post.classList.add(this.COLLAPSED_CLASS);
-    Utils.setInlineStyle(post, "min-height", height + "px", "important");
     this.collapsed.add(post);
     this.renderStub(post, kind);
   },
   restore: function (post) {
     if (!post) return;
     post.classList.remove(this.COLLAPSED_CLASS);
-    Utils.restoreInlineStyle(post, "min-height");
+    delete post.dataset.ftIgHeight;
     post
       .querySelectorAll(":scope > ." + this.STUB_CLASS)
       .forEach((el) => el.remove());
@@ -813,8 +716,6 @@ const IGFeed = {
   },
   restoreAll: function () {
     [...this.collapsed].forEach((post) => this.restore(post));
-    this.clearEnd();
-    this.endBypass = false;
     this.collapsed.clear();
     this.lastRevealAllowed = null;
     document
@@ -847,6 +748,8 @@ const IGFeed = {
         parseInt(post.dataset.ftIgStubs || "0", 10) + 1,
       );
     }
+    const height = parseInt(post.dataset.ftIgHeight || "0", 10);
+    if (height > 0) stub.style.setProperty("height", height + "px", "important");
     while (stub.firstChild) stub.removeChild(stub.firstChild);
 
     const iconUrl = Utils.getExtensionUrl("icons/icon128.png");
@@ -858,22 +761,14 @@ const IGFeed = {
       stub.appendChild(icon);
     }
 
-    const isEnd = this.endedAt === post;
-    stub.classList.toggle("ft-ig-stub-end", isEnd);
-
     const title = document.createElement("h3");
-    title.textContent = isEnd
-      ? "That's everyone you follow"
-      : kind === "ad"
-        ? "Sponsored post"
-        : "Suggested post";
+    title.textContent = kind === "ad" ? "Sponsored post" : "Suggested post";
     stub.appendChild(title);
 
     const subtitle = document.createElement("p");
     const author = this.author(post);
-    subtitle.textContent = isEnd
-      ? "Everything past this point was suggestions, so the feed stops here."
-      : kind === "ad"
+    subtitle.textContent =
+      kind === "ad"
         ? "We're keeping you productive."
         : author
           ? "@" + author + " is not someone you follow."
@@ -884,18 +779,12 @@ const IGFeed = {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ft-ig-stub-btn";
-      button.textContent = isEnd ? "Keep Scrolling" : "View Anyway";
+      button.textContent = "View Anyway";
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (isEnd) {
-          this.endBypass = true;
-          this.clearEnd();
-          this.schedule();
-        } else {
-          post.dataset.ftIgReveal = "1";
-          this.restore(post);
-        }
+        post.dataset.ftIgReveal = "1";
+        this.restore(post);
       });
       stub.appendChild(button);
     }
