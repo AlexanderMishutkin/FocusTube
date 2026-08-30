@@ -364,3 +364,15 @@ body.ft-hide-ig-suggested.ft-platform-ig article.ft-ig-collapsed {
 .ft-ig-stub-btn:hover {
   opacity: 0.85;
 }
+.ft-ig-stub-end {
+  border-color: rgba(79, 172, 254, 0.55);
+  background: linear-gradient(
+    180deg,
+    rgba(79, 172, 254, 0.06) 0%,
+    rgba(79, 172, 254, 0.02) 100%
+  );
+}
+.ft-ig-stub-end.dark {
+  background: #1b1f23;
+  border-color: rgba(79, 172, 254, 0.45);
+}

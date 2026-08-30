@@ -358,6 +358,9 @@ const IGFeed = {
   // the whole defence against runaway pagination.
   MIN_COLLAPSED_HEIGHT: 400,
   MAX_COLLAPSE_PER_TICK: 8,
+  // After this many hidden posts in a row there is nothing left but
+  // suggestions, so the feed is ended rather than scrolled through.
+  END_FEED_AFTER: 8,
   MAX_STUB_REPAIRS: 3,
   TICK_INTERVAL_MS: 100,
   UNBOUNDED_SCAN: 20,
@@ -376,6 +379,9 @@ const IGFeed = {
   observer: null,
   root: null,
   collapsed: new Set(),
+  truncatedTail: new Set(),
+  endedAt: null,
+  endBypass: false,
   lastRevealAllowed: null,
   scheduled: false,
   trailingTimer: null,
@@ -406,7 +412,10 @@ const IGFeed = {
   },
   sync: function () {
     const path = window.location.pathname;
-    if (path !== this.lastPath) this.lastPath = path;
+    if (path !== this.lastPath) {
+      this.lastPath = path;
+      this.endBypass = false;
+    }
     if (this.shouldRun()) this.enable();
     else this.disable();
   },
@@ -486,6 +495,7 @@ const IGFeed = {
     this.ensureObserver();
     if (!this.root) return;
     Utils.pruneDetachedElements(this.collapsed);
+    Utils.pruneDetachedElements(this.truncatedTail);
 
     // Switching between strict and warn changes whether the stubs offer a way
     // through, so redraw the ones already on screen.
@@ -506,6 +516,8 @@ const IGFeed = {
     let collapsedThisTick = 0;
     let pastDivider = false;
     let seenPost = false;
+    let run = 0;
+    let endAt = null;
 
     nodes.forEach((node) => {
       if (node.tagName === "H3") {
@@ -515,11 +527,13 @@ const IGFeed = {
       const post = node;
       seenPost = true;
       if (post.dataset.ftIgGiveUp === "1") {
+        run = 0;
         if (this.collapsed.has(post)) this.restore(post);
         return;
       }
       if (post.dataset.ftIgReveal === "1") {
         if (revealAllowed) {
+          run = 0;
           if (this.collapsed.has(post)) this.restore(post);
           return;
         }
@@ -531,17 +545,23 @@ const IGFeed = {
       // next tick rather than judging it early.
       if (kind === "pending") return;
       if (kind === "keep") {
+        run = 0;
         if (this.collapsed.has(post)) this.restore(post);
         return;
       }
       if (this.collapsed.has(post)) {
         this.repairStub(post, kind);
-        return;
+      } else {
+        if (collapsedThisTick >= this.MAX_COLLAPSE_PER_TICK) return;
+        this.collapse(post, kind);
+        collapsedThisTick += 1;
       }
-      if (collapsedThisTick >= this.MAX_COLLAPSE_PER_TICK) return;
-      this.collapse(post, kind);
-      collapsedThisTick += 1;
+      run += 1;
+      if (run >= this.END_FEED_AFTER && !endAt) endAt = post;
     });
+
+    if (endAt && !this.endBypass) this.endFeed(endAt);
+    else this.clearEnd();
   },
   postChrome: function (post) {
     // Feed posts carry no <header>. The like/comment/share <section> is the
@@ -637,6 +657,44 @@ const IGFeed = {
     }
     return "pending";
   },
+  endFeed: function (post) {
+    if (this.endedAt !== post) {
+      this.clearEnd();
+      this.endedAt = post;
+      this.renderStub(post, post.dataset.ftIgClass);
+    }
+    this.truncateAfter(post);
+  },
+  truncateAfter: function (post) {
+    // Hide everything below this post, at every level between it and the feed
+    // root. Instagram's load-more sentinel is somewhere down there, and an
+    // IntersectionObserver never fires for a display:none element - so this
+    // stops the pagination requests, not just the posts they bring back.
+    let node = post;
+    while (node && node !== this.root && node.parentElement) {
+      let sibling = node.nextElementSibling;
+      while (sibling) {
+        if (!this.truncatedTail.has(sibling)) {
+          Utils.setInlineStyle(sibling, "display", "none", "important");
+          this.truncatedTail.add(sibling);
+        }
+        sibling = sibling.nextElementSibling;
+      }
+      node = node.parentElement;
+    }
+  },
+  clearEnd: function () {
+    if (!this.endedAt && !this.truncatedTail.size) return;
+    this.truncatedTail.forEach((el) =>
+      Utils.restoreInlineStyle(el, "display"),
+    );
+    this.truncatedTail.clear();
+    const ended = this.endedAt;
+    this.endedAt = null;
+    if (ended && ended.isConnected && this.collapsed.has(ended)) {
+      this.renderStub(ended, ended.dataset.ftIgClass);
+    }
+  },
   measureHeight: function (post) {
     // Measured before collapsing, while the post is still laid out. The floor
     // covers a post whose media has not loaded yet and would otherwise pin
@@ -662,6 +720,8 @@ const IGFeed = {
   },
   restoreAll: function () {
     [...this.collapsed].forEach((post) => this.restore(post));
+    this.clearEnd();
+    this.endBypass = false;
     this.collapsed.clear();
     this.lastRevealAllowed = null;
     document
@@ -705,14 +765,22 @@ const IGFeed = {
       stub.appendChild(icon);
     }
 
+    const isEnd = this.endedAt === post;
+    stub.classList.toggle("ft-ig-stub-end", isEnd);
+
     const title = document.createElement("h3");
-    title.textContent = kind === "ad" ? "Sponsored post" : "Suggested post";
+    title.textContent = isEnd
+      ? "That's everyone you follow"
+      : kind === "ad"
+        ? "Sponsored post"
+        : "Suggested post";
     stub.appendChild(title);
 
     const subtitle = document.createElement("p");
     const author = this.author(post);
-    subtitle.textContent =
-      kind === "ad"
+    subtitle.textContent = isEnd
+      ? "Everything past this point was suggestions, so the feed stops here."
+      : kind === "ad"
         ? "We're keeping you productive."
         : author
           ? "@" + author + " is not someone you follow."
@@ -723,12 +791,18 @@ const IGFeed = {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ft-ig-stub-btn";
-      button.textContent = "View Anyway";
+      button.textContent = isEnd ? "Keep Scrolling" : "View Anyway";
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        post.dataset.ftIgReveal = "1";
-        this.restore(post);
+        if (isEnd) {
+          this.endBypass = true;
+          this.clearEnd();
+          this.schedule();
+        } else {
+          post.dataset.ftIgReveal = "1";
+          this.restore(post);
+        }
       });
       stub.appendChild(button);
     }
