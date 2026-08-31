@@ -34,12 +34,15 @@ const CONFIG = {
     ytShortsShelves: true,
     ytMostRelevantShelf: true,
     igReelsNav: true,
-    igSuggested: true,
+    // The two feed filters ship off. They judge individual posts, so a
+    // wrong call hides something the user wanted; the rest of visualHiding
+    // only ever hides a whole fixed region.
+    igSuggested: false,
     fbReelsNav: true,
     fbPeopleYouMightKnow: true,
     liFeed: true,
     liAddFeed: true,
-    liSuggested: true,
+    liSuggested: false,
   },
 };
 const FocusState = {
@@ -1034,12 +1037,12 @@ const UI = {
         ytShortsShelves: res.hide_yt_shorts_shelves !== false,
         ytMostRelevantShelf: res.hide_yt_most_relevant_shelf !== false,
         igReelsNav: res.hide_ig_reels_nav !== false,
-        igSuggested: res.hide_ig_suggested !== false,
+        igSuggested: res.hide_ig_suggested === true,
         fbReelsNav: res.hide_fb_reels_nav !== false,
         fbPeopleYouMightKnow: res.hide_fb_people_you_might_know !== false,
         liFeed: res.hide_li_feed !== false,
         liAddFeed: res.hide_li_addfeed !== false,
-        liSuggested: res.hide_li_suggested !== false,
+        liSuggested: res.hide_li_suggested === true,
       };
       Utils._debugEnabled = res.ft_debug === true;
       Utils.ensureBody(() => {
@@ -1213,7 +1216,7 @@ const UI = {
     }
     if (changes.hide_ig_suggested) {
       CONFIG.visualHiding.igSuggested =
-        changes.hide_ig_suggested.newValue !== false;
+        changes.hide_ig_suggested.newValue === true;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_fb_reels_nav) {
@@ -1232,7 +1235,7 @@ const UI = {
     }
     if (changes.hide_li_suggested) {
       CONFIG.visualHiding.liSuggested =
-        changes.hide_li_suggested.newValue !== false;
+        changes.hide_li_suggested.newValue === true;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_li_addfeed) {
