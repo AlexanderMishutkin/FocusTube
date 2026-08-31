@@ -1,0 +1,11 @@
+{
+  "name": "focustube-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node badge.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

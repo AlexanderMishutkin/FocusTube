@@ -103,42 +103,70 @@ const Utils = {
       return false;
     }
   },
-  // The extension's mark, drawn inline. Nothing here loads an image from
-  // chrome-extension://, because chrome.runtime.getURL() returns
+  // The FocusTube icon, drawn inline: the same gradient plate and four
+  // concentric rings as icons/icon128.png, measured off it - the plate inset
+  // and corner radius, each ring's radius and stroke width, and the two
+  // gradient stops - so this is the logo rather than a stand-in for it. The
+  // 128-unit viewBox keeps the icon's own padding, so every call site that
+  // sized the old <img> from a stylesheet keeps the size it had.
+  //
+  // Drawn rather than loaded because chrome.runtime.getURL() returns
   // "chrome-extension://invalid/" once the extension context has been replaced
   // - which happens on every reload of an unpacked build while pages are open
   // - and the page then retries that URL for as long as it stays open.
+  _badgeSeq: 0,
   createBadge: function (className) {
     const NS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", "0 0 64 64");
+    svg.setAttribute("viewBox", "0 0 128 128");
     svg.setAttribute("aria-hidden", "true");
     if (className) svg.setAttribute("class", className);
+    // Ids are page-global, and several badges can be on screen at once: two
+    // gradients sharing an id would both resolve to whichever came first.
+    this._badgeSeq += 1;
+    const gradientId = "ft-badge-gradient-" + this._badgeSeq;
+    const defs = document.createElementNS(NS, "defs");
+    const gradient = document.createElementNS(NS, "linearGradient");
+    gradient.setAttribute("id", gradientId);
+    // Blue at the top right, cyan at the bottom left.
+    gradient.setAttribute("x1", "100%");
+    gradient.setAttribute("y1", "0%");
+    gradient.setAttribute("x2", "0%");
+    gradient.setAttribute("y2", "100%");
+    [
+      ["0%", "#0969db"],
+      ["100%", "#06cecb"],
+    ].forEach(([offset, color]) => {
+      const stop = document.createElementNS(NS, "stop");
+      stop.setAttribute("offset", offset);
+      stop.setAttribute("stop-color", color);
+      gradient.appendChild(stop);
+    });
+    defs.appendChild(gradient);
+    svg.appendChild(defs);
     const plate = document.createElementNS(NS, "rect");
-    plate.setAttribute("x", "2");
-    plate.setAttribute("y", "2");
-    plate.setAttribute("width", "60");
-    plate.setAttribute("height", "60");
-    plate.setAttribute("rx", "16");
-    plate.setAttribute("fill", "#3ddc84");
-    const ring = document.createElementNS(NS, "circle");
-    ring.setAttribute("cx", "32");
-    ring.setAttribute("cy", "32");
-    ring.setAttribute("r", "15");
-    ring.setAttribute("fill", "none");
-    ring.setAttribute("stroke", "#fff");
-    ring.setAttribute("stroke-width", "4");
-    const slash = document.createElementNS(NS, "line");
-    slash.setAttribute("x1", "21");
-    slash.setAttribute("y1", "21");
-    slash.setAttribute("x2", "43");
-    slash.setAttribute("y2", "43");
-    slash.setAttribute("stroke", "#fff");
-    slash.setAttribute("stroke-width", "4");
-    slash.setAttribute("stroke-linecap", "round");
+    plate.setAttribute("x", "9");
+    plate.setAttribute("y", "9");
+    plate.setAttribute("width", "110");
+    plate.setAttribute("height", "110");
+    plate.setAttribute("rx", "44");
+    plate.setAttribute("fill", "url(#" + gradientId + ")");
     svg.appendChild(plate);
-    svg.appendChild(ring);
-    svg.appendChild(slash);
+    [
+      [6.35, 0.7],
+      [11.2, 1.6],
+      [17.8, 2.4],
+      [27.45, 3.5],
+    ].forEach(([radius, width]) => {
+      const ring = document.createElementNS(NS, "circle");
+      ring.setAttribute("cx", "64");
+      ring.setAttribute("cy", "64");
+      ring.setAttribute("r", String(radius));
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#fff");
+      ring.setAttribute("stroke-width", String(width));
+      svg.appendChild(ring);
+    });
     return svg;
   },
   getExtensionUrl: function (path) {
@@ -794,7 +822,7 @@ const UI = {
       };
       btnGroup.appendChild(msgBtn);
     }
-    if (iconUrl) card.appendChild(img);
+    card.appendChild(img);
     card.append(h1, p, btnGroup);
     overlay.appendChild(card);
     target.appendChild(overlay);
