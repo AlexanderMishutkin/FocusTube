@@ -338,8 +338,6 @@ const Facebook = {
     );
   },
   showStoriesOverlay: function () {
-    const iconUrl = Utils.getExtensionUrl("icons/icon48.png");
-    if (!iconUrl) return;
     if (document.getElementById(this.storiesOverlayId)) return;
     const storiesContainer = document.querySelector('[aria-label="Stories"]');
     if (!storiesContainer) return;
@@ -353,9 +351,7 @@ const Facebook = {
     overlay.id = this.storiesOverlayId;
     overlay.className = "ft-stories-overlay";
     if (CONFIG.isDarkMode) overlay.classList.add("dark");
-    const icon = document.createElement("img");
-    icon.src = iconUrl;
-    icon.className = "ft-stories-overlay-icon";
+    const icon = Utils.createBadge("ft-stories-overlay-icon");
     const text = document.createElement("span");
     text.textContent = "Stories Hidden";
     overlay.appendChild(icon);
