@@ -2,6 +2,27 @@
 
 All notable project-facing changes are documented here.
 
+## [2.3.0-fork.1] - 2026-08-31
+
+- Fixed: the blocking overlay was never created. `UI.create()` referenced a
+  variable whose declaration had been removed with the icon change, so the
+  call threw and no overlay appeared on any platform, in strict or warn. This
+  is the bug that made 2.3.0-fork look like it did nothing.
+- Fixed: the inline badge was not the FocusTube logo. It is now drawn from
+  measurements taken off this fork's own green `icons/icon128.png`.
+- Instagram no longer treats any short-text button in a post header as a
+  follow control, so an ordinary post cannot be hidden by an unrelated
+  button.
+- LinkedIn scopes the follow-control search to the outer post. Resharing
+  somebody you are not connected to no longer hides the post of the person
+  you follow who reshared it.
+- Cached classifications are retired when a control paints late or when a
+  feed element is recycled for a different post.
+- Collapsed posts have their video and audio paused instead of being hidden
+  while still playing.
+- Both feed filters ship on in this fork. Upstream ships them off.
+- Added `test/`: 146 assertions across the badge, Instagram and LinkedIn.
+
 ## [2.3.0-fork] - 2026-08-30
 
 Fork of FocusTube by malekwael229, maintained by Aleksandr Mishutkin.
