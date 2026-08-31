@@ -260,13 +260,9 @@ function updatePlatformIcon(icon, mode) {
     badge.textContent = mode === "strict" ? "S" : mode === "warn" ? "W" : "P";
   }
 }
-// hide_ig_suggested and hide_li_suggested ship off. They judge individual
-// posts, so a wrong call hides something the user wanted to see; every other
-// toggle here hides a whole fixed region and ships on.
-const DEFAULT_OFF_SETTINGS = new Set([
-  "hide_ig_suggested",
-  "hide_li_suggested",
-]);
+// Upstream ships the two feed filters off; this fork ships everything on, so
+// nothing is listed here. Kept as the one place a default-off toggle would go.
+const DEFAULT_OFF_SETTINGS = new Set([]);
 function settingIsOn(key, value) {
   if (value === undefined || value === null) {
     return !DEFAULT_OFF_SETTINGS.has(key);

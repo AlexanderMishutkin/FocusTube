@@ -142,7 +142,7 @@ console.log("\nthe badge is the FocusTube logo");
     const stops = [...badge.querySelectorAll("stop")].map((s) =>
       s.getAttribute("stop-color"),
     );
-    assert.deepEqual(stops, ["#0969db", "#06cecb"]);
+    assert.deepEqual(stops, ["#09db6b", "#06cc85"]);
   });
   check("four concentric rings, as on icons/icon128.png", () => {
     assert.equal(rings.length, 4);

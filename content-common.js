@@ -34,15 +34,15 @@ const CONFIG = {
     ytShortsShelves: true,
     ytMostRelevantShelf: true,
     igReelsNav: true,
-    // The two feed filters ship off. They judge individual posts, so a
-    // wrong call hides something the user wanted; the rest of visualHiding
-    // only ever hides a whole fixed region.
-    igSuggested: false,
+    // Upstream ships these two off; this fork ships them on. Hiding posts
+    // from accounts you do not follow is the reason this fork exists, so it
+    // is on out of the box rather than something to go and find.
+    igSuggested: true,
     fbReelsNav: true,
     fbPeopleYouMightKnow: true,
     liFeed: true,
     liAddFeed: true,
-    liSuggested: false,
+    liSuggested: true,
   },
 };
 const FocusState = {
@@ -131,14 +131,15 @@ const Utils = {
     const defs = document.createElementNS(NS, "defs");
     const gradient = document.createElementNS(NS, "linearGradient");
     gradient.setAttribute("id", gradientId);
-    // Blue at the top right, cyan at the bottom left.
+    // Green at the top right, teal at the bottom left - measured off this
+    // fork's recoloured icons/icon128.png, not upstream's blue ones.
     gradient.setAttribute("x1", "100%");
     gradient.setAttribute("y1", "0%");
     gradient.setAttribute("x2", "0%");
     gradient.setAttribute("y2", "100%");
     [
-      ["0%", "#0969db"],
-      ["100%", "#06cecb"],
+      ["0%", "#09db6b"],
+      ["100%", "#06cc85"],
     ].forEach(([offset, color]) => {
       const stop = document.createElementNS(NS, "stop");
       stop.setAttribute("offset", offset);
@@ -1037,12 +1038,12 @@ const UI = {
         ytShortsShelves: res.hide_yt_shorts_shelves !== false,
         ytMostRelevantShelf: res.hide_yt_most_relevant_shelf !== false,
         igReelsNav: res.hide_ig_reels_nav !== false,
-        igSuggested: res.hide_ig_suggested === true,
+        igSuggested: res.hide_ig_suggested !== false,
         fbReelsNav: res.hide_fb_reels_nav !== false,
         fbPeopleYouMightKnow: res.hide_fb_people_you_might_know !== false,
         liFeed: res.hide_li_feed !== false,
         liAddFeed: res.hide_li_addfeed !== false,
-        liSuggested: res.hide_li_suggested === true,
+        liSuggested: res.hide_li_suggested !== false,
       };
       Utils._debugEnabled = res.ft_debug === true;
       Utils.ensureBody(() => {
@@ -1216,7 +1217,7 @@ const UI = {
     }
     if (changes.hide_ig_suggested) {
       CONFIG.visualHiding.igSuggested =
-        changes.hide_ig_suggested.newValue === true;
+        changes.hide_ig_suggested.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_fb_reels_nav) {
@@ -1235,7 +1236,7 @@ const UI = {
     }
     if (changes.hide_li_suggested) {
       CONFIG.visualHiding.liSuggested =
-        changes.hide_li_suggested.newValue === true;
+        changes.hide_li_suggested.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_li_addfeed) {
