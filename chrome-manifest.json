@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "FocusTube (Alex's edition)",
-  "version": "2.3.0.1",
-  "version_name": "2.3.0-fork.1",
+  "version": "2.3.0.2",
+  "version_name": "2.3.0-fork.2",
   "description": "Reduce distractions from YouTube Shorts, Instagram Reels, TikTok, Facebook Reels and LinkedIn, and hide feed posts you don't follow.",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"

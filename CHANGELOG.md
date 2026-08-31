@@ -2,6 +2,19 @@
 
 All notable project-facing changes are documented here.
 
+## [2.3.0-fork.2] - 2026-08-31
+
+- LinkedIn hid nothing at all. The header scoping read one author as three
+  people - avatar label, name block, and the name block repeated - so the
+  header ended above that author's own Follow control and every post came out
+  as "keep". Fixed, with a fixture kept at full header shape so the tests see
+  the markup the live site actually serves.
+- New setting: **Hide what your network reacted to**, on by default. With it
+  on you see only your connections' own posts and pages you follow. Turn it
+  off to also see posts that reached you because somebody you know liked or
+  commented on them, while suggestions and promoted posts stay hidden.
+- Post placeholders now say which of the three reasons applies.
+
 ## [2.3.0-fork.1] - 2026-08-31
 
 - Fixed: the blocking overlay was never created. `UI.create()` referenced a

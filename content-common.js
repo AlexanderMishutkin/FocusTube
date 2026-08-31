@@ -43,6 +43,7 @@ const CONFIG = {
     liFeed: true,
     liAddFeed: true,
     liSuggested: true,
+    liActivity: true,
   },
 };
 const FocusState = {
@@ -998,6 +999,7 @@ const UI = {
       "hide_li_feed",
       "hide_li_addfeed",
       "hide_li_suggested",
+      "hide_li_activity",
       "ft_debug",
     ],
     (res) => {
@@ -1044,6 +1046,7 @@ const UI = {
         liFeed: res.hide_li_feed !== false,
         liAddFeed: res.hide_li_addfeed !== false,
         liSuggested: res.hide_li_suggested !== false,
+        liActivity: res.hide_li_activity !== false,
       };
       Utils._debugEnabled = res.ft_debug === true;
       Utils.ensureBody(() => {
@@ -1237,6 +1240,11 @@ const UI = {
     if (changes.hide_li_suggested) {
       CONFIG.visualHiding.liSuggested =
         changes.hide_li_suggested.newValue !== false;
+      Utils.applyVisualHidingClasses();
+    }
+    if (changes.hide_li_activity) {
+      CONFIG.visualHiding.liActivity =
+        changes.hide_li_activity.newValue !== false;
       Utils.applyVisualHidingClasses();
     }
     if (changes.hide_li_addfeed) {
